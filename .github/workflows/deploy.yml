@@ -1,0 +1,54 @@
+name: Deploy
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, master]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    if: ${{ secrets.HEROKU_API_KEY != '' && secrets.HEROKU_APP_NAME != '' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install package
+        run: pip install -e .
+
+      - name: Build aggregates database
+        run: |
+          python tests/fixtures/generate_fixtures.py
+          python scripts/build_data.py --source fixtures
+
+      - name: Bundle data into deploy commit
+        run: |
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config user.name "github-actions[bot]"
+          git add -f data/h1b_data.db
+          git diff --staged --quiet || git commit -m "ci: ship h1b_data.db with release"
+
+      - name: Deploy to Heroku
+        uses: akhileshns/heroku-deploy@v4.2.0
+        with:
+          heroku_api_key: ${{ secrets.HEROKU_API_KEY }}
+          heroku_app_name: ${{ secrets.HEROKU_APP_NAME }}
+          heroku_email: ${{ secrets.HEROKU_EMAIL }}
+          usedocker: false
+          justlogin: false
+
+      - name: Smoke healthz + demo
+        env:
+          HEROKU_APP_URL: https://${{ secrets.HEROKU_APP_NAME }}.herokuapp.com
+        run: python scripts/smoke.py --base-url "$HEROKU_APP_URL"
+
+  deploy-skipped:
+    runs-on: ubuntu-latest
+    if: ${{ secrets.HEROKU_API_KEY == '' || secrets.HEROKU_APP_NAME == '' }}
+    steps:
+      - run: |
+          echo "Deploy skipped — set HEROKU_API_KEY, HEROKU_APP_NAME, and HEROKU_EMAIL repo secrets."
+          echo "Workflow is ready; push again after secrets are configured."

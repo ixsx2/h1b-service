@@ -1,0 +1,56 @@
+name: Quarterly ETL
+
+on:
+  schedule:
+    # 15th of Jan/Apr/Jul/Oct — after typical OFLC quarterly releases
+    - cron: "0 12 15 1,4,7,10 *"
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - run: pip install -e .
+
+      - name: Download sources from manifest
+        id: download
+        continue-on-error: true
+        run: python -m etl.download --output data/sources
+
+      - name: Build from manifest
+        if: steps.download.outcome == 'success'
+        run: python scripts/build_data.py --source manifest
+
+      - name: Build from fixtures (fallback)
+        if: steps.download.outcome != 'success'
+        run: |
+          echo "::warning::Manifest download failed — built from synthetic fixtures."
+          python tests/fixtures/generate_fixtures.py
+          python scripts/build_data.py --source fixtures
+
+      - name: Upload h1b_data.db artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: h1b_data-${{ github.run_number }}
+          path: data/h1b_data.db
+          retention-days: 90
+
+      - name: Honeybadger check-in
+        if: ${{ secrets.HONEYBADGER_ETL_CHECKIN_URL != '' }}
+        run: |
+          curl -fsS -g "${{ secrets.HONEYBADGER_ETL_CHECKIN_URL }}" || \
+            echo "::warning::Honeybadger check-in failed"
+
+      - name: Notify on failure
+        if: failure()
+        run: |
+          echo "::error::Quarterly ETL failed — inspect download URLs in etl/manifest.json"
+          if [ -n "${{ secrets.HONEYBADGER_ETL_CHECKIN_URL }}" ]; then
+            curl -fsS -g "${{ secrets.HONEYBADGER_ETL_CHECKIN_URL }}/fail" || true
+          fi

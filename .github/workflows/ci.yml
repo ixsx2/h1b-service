@@ -18,3 +18,27 @@ jobs:
       - run: python -m etl.build --fixtures tests/fixtures
       - run: pytest -v
       - run: ruff check .
+
+  testmail-e2e:
+    runs-on: ubuntu-latest
+    if: ${{ secrets.TESTMAIL_API_KEY != '' && secrets.TESTMAIL_NAMESPACE != '' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -e ".[dev]"
+      - run: python tests/fixtures/generate_fixtures.py
+      - run: python -m etl.build --fixtures tests/fixtures
+      - env:
+          TESTMAIL_API_KEY: ${{ secrets.TESTMAIL_API_KEY }}
+          TESTMAIL_NAMESPACE: ${{ secrets.TESTMAIL_NAMESPACE }}
+          OTP_SECRET: ci-test-otp-secret
+        run: pytest tests/test_testmail_e2e.py -v
+
+  testmail-skipped:
+    runs-on: ubuntu-latest
+    if: ${{ secrets.TESTMAIL_API_KEY == '' || secrets.TESTMAIL_NAMESPACE == '' }}
+    steps:
+      - run: echo "Testmail e2e skipped — set TESTMAIL_API_KEY and TESTMAIL_NAMESPACE secrets."
+

@@ -1,0 +1,44 @@
+{
+  "name": "H-1B Sponsorship Signal",
+  "description": "Public pilot API: would this company sponsor an H-1B?",
+  "repository": "https://github.com/ixsx2/h1b-service",
+  "keywords": ["python", "fastapi", "h1b"],
+  "stack": "heroku-24",
+  "buildpacks": [
+    { "url": "heroku/python" }
+  ],
+  "formation": {
+    "web": {
+      "quantity": 1,
+      "size": "basic"
+    }
+  },
+  "addons": [
+    { "plan": "heroku-postgresql:essential-0" }
+  ],
+  "env": {
+    "H1B_DATA_DB": {
+      "description": "Path to read-only aggregates SQLite inside the slug",
+      "value": "data/h1b_data.db"
+    },
+    "OTP_SECRET": {
+      "description": "Secret for hashing OTP codes and API keys",
+      "generator": "secret"
+    },
+    "EMAIL_FROM": {
+      "description": "Resend sender after DKIM (e.g. otp@yourname.dev)",
+      "required": true
+    },
+    "RESEND_API_KEY": {
+      "description": "Resend API key for OTP email",
+      "required": true
+    },
+    "DEMO_EMPLOYER": {
+      "description": "Canonical employer for GET /v1/demo",
+      "value": "DATADOG"
+    }
+  },
+  "scripts": {
+    "postdeploy": "python scripts/smoke.py --base-url $HEROKU_APP_URL || true"
+  }
+}

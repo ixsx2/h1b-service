@@ -1,9 +1,9 @@
 # H1B Data Service — Pilot Plan
 
-Status: **Phase 1 complete** (CP0–CP5 landed 2026-07-07): ETL against synthetic
-fixtures, signal logic, local API with six routes, landing + mock-email OTP e2e.
-Real-file ETL validation test skips until DOL/USCIS files are placed in
-`tests/fixtures/real/`. Phase 2 = deploy (Heroku, Postgres, Resend, .dev domain).
+Status: **Phase 1 + deploy prep complete** (2026-07-07). CP0–CP5 landed; Phase 2b
+(workflows, `app.json`, ETL cron, `docs/deploy.md`) landed same day. **Phase 3**
+(first live deploy) blocked on domain, GitHub remote, Heroku app, Resend, Testmail.
+Real-file ETL test skips until DOL/USCIS files in `tests/fixtures/real/`.
 Read [CONTEXT.md](CONTEXT.md) for domain terms and [docs/adr/](docs/adr/) for
 recorded decisions before changing anything here.
 
@@ -79,34 +79,42 @@ data-engineering portfolio artifact.
     curl-first and lock-in free), DigitalOcean credit (expiry ambiguity, no
     volumes on App Platform), Doppler/Travis/New Relic (redundant).
 
-## Repo layout (target)
+## Repo layout (current)
 
 ```
-app/          FastAPI: main.py, auth.py, signal.py, quotas.py, db.py, landing.html
-etl/          build.py, column_maps.py, sources.py
-tests/        signal tiers, canonicalization, auth flow, quota edges
-.github/workflows/  deploy.yml, etl.yml (quarterly cron)
-Dockerfile / Procfile
-CONTEXT.md, PLAN.md, README.md (written for strangers), docs/adr/
+app/              main.py, auth.py, signal.py, quotas.py, db.py, lookup.py, landing.html
+etl/              build.py, column_maps.py, sources.py, download.py, manifest.json
+scripts/          build_data.py, smoke.py
+bin/              post_compile (Heroku buildpack hook)
+tests/            signal, ETL, API, lookup, e2e, testmail (CI-gated), real_etl (skipped)
+.github/workflows/  ci.yml, deploy.yml, etl.yml
+docs/             adr/, deploy.md
+Dockerfile / Procfile / app.json / runtime.txt
+CONTEXT.md, PLAN.md, README.md
 ```
 
 ## Phases
 
-1. ETL against real FY2025+FY2026 DOL/USCIS files locally + signal logic +
-   local API + full pytest suite.
-2. Landing page + OTP/key flow (Testmail-backed e2e tests).
-3. Deploy: Heroku + Postgres + .dev domain + Resend DKIM; live smoke of the
-   whole funnel (visit -> demo -> signup -> key -> signal call).
-4. Wire monitoring (Sentry, Datadog, Honeybadger, SimpleAnalytics); publish;
-   post for feedback.
+| # | Scope | Status |
+|---|--------|--------|
+| 1 | ETL (synthetic fixtures) + signal logic + local API + pytest | **Done** (2026-07-07) |
+| 2 | Landing + OTP/key flow + Testmail e2e (CI job wired, skips without secrets) | **Done** |
+| 2b | Deploy prep: Heroku manifest, GitHub workflows, ETL cron, smoke script | **Done** |
+| 3 | Live deploy: Heroku + Postgres + `.dev` domain + Resend DKIM + funnel smoke | **Blocked on Ishan** |
+| 4 | Monitoring (Sentry, Datadog, Honeybadger, SimpleAnalytics) + publish | Not started |
 
-## Blocked on Ishan (none block Phase 1)
+## Blocked on Ishan (blocks Phase 3 — live deploy)
 
-- Redeem from Student Pack: Heroku credit, Name.com .dev domain (pick name),
-  Testmail
-- Create Resend account
-- Create public GitHub repo (github.com/ixsx2/...) + Heroku app
-- Pick the public name/domain
+- Pick public name + redeem Name.com `.dev` domain from Student Pack
+- Redeem Heroku credit; create Heroku app + link to GitHub repo
+- Create public GitHub repo (`github.com/ixsx2/...`) and push this code
+- Create Resend account; set `RESEND_API_KEY` + `EMAIL_FROM` after DKIM
+- Redeem Testmail; set `TESTMAIL_API_KEY` + `TESTMAIL_NAMESPACE` GitHub secrets
+- Paste USCIS CSV URL into `etl/manifest.json` (DOL URLs templated; verify after OFLC releases)
+- Optional: `HONEYBADGER_ETL_CHECKIN_URL` for quarterly ETL watchdog
+
+Checklist: [docs/deploy.md](docs/deploy.md). GitHub secrets for deploy:
+`HEROKU_API_KEY`, `HEROKU_APP_NAME`, `HEROKU_EMAIL`.
 
 ## Verification bar before "live"
 

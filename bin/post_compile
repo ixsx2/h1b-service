@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+# Heroku Python buildpack hook — builds aggregates when deploying without CI bundle.
+set -euo pipefail
+python scripts/build_data.py --source fixtures

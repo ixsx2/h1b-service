@@ -5,7 +5,16 @@ disclosure files and the USCIS H-1B Employer Data Hub.
 
 ## Status
 
-Phase 1 complete (local API + tests). Next: deploy to Heroku with Postgres, Resend, and a `.dev` domain.
+| Milestone | State |
+|-----------|--------|
+| Phase 1 — ETL, signal logic, local API, pytest | Done |
+| Phase 2 — landing, OTP flow, mock-email e2e | Done |
+| Phase 2b — deploy prep (workflows, Heroku manifest, ETL cron) | Done |
+| Phase 3 — live deploy (Heroku, Postgres, domain, Resend) | **Blocked on you** |
+
+Tests: **31 passed, 2 skipped** (`test_real_etl`, `test_testmail_e2e`).
+
+Deploy checklist: **[docs/deploy.md](docs/deploy.md)**
 
 ## Quick start (local)
 
@@ -14,13 +23,11 @@ python -m venv .venv
 .venv\Scripts\activate          # Windows
 pip install -e ".[dev]"
 
-# Build aggregates from fixtures (or real DOL/USCIS files — see below)
 python -m etl.build --fixtures tests/fixtures
-
-# Run API
 uvicorn app.main:app --reload
+```
 
-# Tests
+```bash
 pytest
 ruff check .
 ```
@@ -28,17 +35,23 @@ ruff check .
 ## ETL
 
 ```bash
-# Synthetic fixtures (CI / dev)
+# Synthetic fixtures (CI / dev / initial Heroku slug)
 python -m etl.build --fixtures tests/fixtures
+# or
+python scripts/build_data.py --source fixtures
 
-# Real files (download from DOL + USCIS first)
+# Real files — download then build
+python -m etl.download --output data/sources   # URLs in etl/manifest.json
+python scripts/build_data.py --source manifest
+
+# Manual paths
 python -m etl.build \
   --dol tests/fixtures/real/LCA_Disclosure_Data_FY2025_Q4.xlsx \
-  --dol tests/fixtures/real/LCA_Disclosure_Data_FY2026_Q1.xlsx \
   --uscis tests/fixtures/real/employer_h1b_data_hub_fy2025.csv
 ```
 
-Quarterly GitHub Actions cron rebuilds `h1b_data.db` and ships it with each release.
+- **Quarterly cron:** `.github/workflows/etl.yml` (Jan/Apr/Jul/Oct 15) uploads `h1b_data.db` artifact.
+- **Deploy:** `.github/workflows/deploy.yml` bundles DB into slug and pushes to Heroku when secrets are set.
 
 ## API (frozen surface)
 
@@ -52,6 +65,15 @@ Quarterly GitHub Actions cron rebuilds `h1b_data.db` and ships it with each rele
 | `GET /v1/employer/{name}` | key, 500/day | Full Employer-Year Aggregates |
 
 Errors: `{"error": "...", "hint": "..."}`.
+
+## Deploy (when ready)
+
+1. Set GitHub secrets: `HEROKU_API_KEY`, `HEROKU_APP_NAME`, `HEROKU_EMAIL`
+2. Heroku config: `OTP_SECRET`, `RESEND_API_KEY`, `EMAIL_FROM`, `DATABASE_URL` (from Postgres addon)
+3. Push to `main` / run **Deploy** workflow
+4. Smoke: `python scripts/smoke.py --base-url https://YOUR_APP.herokuapp.com`
+
+Full steps: [docs/deploy.md](docs/deploy.md)
 
 ## Engagement metrics (Postgres)
 
@@ -84,4 +106,5 @@ GROUP BY 1 ORDER BY 2 DESC LIMIT 20;
 
 - [PLAN.md](PLAN.md) — settled decisions and phases
 - [CONTEXT.md](CONTEXT.md) — domain glossary
+- [docs/deploy.md](docs/deploy.md) — Heroku, secrets, DNS, smoke
 - [docs/adr/](docs/adr/) — architecture decisions

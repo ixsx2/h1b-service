@@ -1,20 +1,18 @@
 # H1B Data Service — Working Instructions
 
 Public-ready pilot API: "would this company sponsor an H-1B?" built from DOL
-LCA disclosure files + USCIS Employer Data Hub. Status: **Phase 1 complete**
-(CP0–CP5: scaffold, ETL, signal logic, local API, landing + OTP e2e). Next:
-deploy to Heroku.
+LCA disclosure files + USCIS Employer Data Hub.
+
+**Status:** Phase 1 + deploy prep complete (2026-07-07). **Next:** Phase 3 live
+deploy — blocked on Ishan's domain, GitHub remote, Heroku app, Resend, Testmail.
+See [docs/deploy.md](docs/deploy.md).
 
 ## Read before working (in this order)
 
-1. `PLAN.md` — all settled decisions, frozen API surface, tier thresholds,
-   quotas, phases. Decisions there were grilled one-by-one; do not re-litigate
-   without new information — propose a change explicitly instead.
-2. `CONTEXT.md` — domain glossary. Use these terms exactly (Canonical
-   Employer, Filed Name, Employer-Year Aggregate, Signal Tier, Trend, Denial
-   Rate). New/changed concepts get added there when they crystallize.
-3. `docs/adr/` — recorded decisions with reasoning. Contradicting an ADR
-   requires updating or superseding it, never silent deviation.
+1. `PLAN.md` — settled decisions, frozen API surface, tier thresholds, phases.
+2. `CONTEXT.md` — domain glossary (Canonical Employer, Signal Tier, etc.).
+3. `docs/adr/` — recorded decisions; contradict only by superseding an ADR.
+4. `docs/deploy.md` — when touching CI/CD, Heroku, or secrets wiring.
 
 ## Hard rules
 
@@ -36,13 +34,15 @@ deploy to Heroku.
 
 ## Verification bar
 
-Every change lands with tests (pytest; ruff clean). Signal-tier and
-lookup-semantics changes need table-driven cases. The OTP flow has
-Testmail-backed e2e tests in CI. Before any deploy is called done: live
-funnel smoke on the deployed URL (visit -> demo -> signup -> key -> signal).
+Every change lands with tests (pytest; ruff clean). Current: **31 passed, 2
+skipped** (real ETL, Testmail e2e). Signal-tier and lookup-semantics changes
+need table-driven cases. Testmail OTP e2e runs in CI when
+`TESTMAIL_API_KEY` + `TESTMAIL_NAMESPACE` secrets are set. Before Phase 3 is
+called done: live funnel smoke on the deployed URL (visit → demo → signup →
+key → signal); ETL column maps validated against real DOL/USCIS files.
 
 ## Engagement (why the pilot exists)
 
-Metrics and their SQL live in `README.md` once built: signups/week,
-activation rate, weekly-active keys, top queried employers. Any feature
-proposal should say which of these it moves.
+Metrics and their SQL live in `README.md`: signups/week, activation rate,
+weekly-active keys, top queried employers. Any feature proposal should say
+which of these it moves.

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Annotated
 
@@ -15,8 +16,6 @@ from app.db import AggregatesDB, UserDB
 from app.lookup import lookup_employer
 from app.signal import build_signal
 
-app = FastAPI(title="H-1B Sponsorship Signal", version="0.1.0")
-
 aggregates_db: AggregatesDB
 user_db: UserDB
 
@@ -25,20 +24,21 @@ def _init_dbs() -> None:
     global aggregates_db, user_db
     from importlib import reload
 
-    import app.config as config
+    import app.config as config_mod
 
-    reload(config)
-    aggregates_db = AggregatesDB(config.H1B_DATA_DB)
-    user_db = UserDB(config.DATABASE_URL)
-
-
-_init_dbs()
+    reload(config_mod)
+    aggregates_db = AggregatesDB(config_mod.H1B_DATA_DB)
+    user_db = UserDB(config_mod.DATABASE_URL)
 
 
-@app.on_event("startup")
-def startup() -> None:
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
     _init_dbs()
     user_db.init_schema()
+    yield
+
+
+app = FastAPI(title="H-1B Sponsorship Signal", version="0.1.0", lifespan=lifespan)
 
 
 def _client_ip(request: Request) -> str:
@@ -89,7 +89,11 @@ def _signal_payload(canonical: str, matched_as: str | None = None) -> dict:
 def landing(request: Request) -> HTMLResponse:
     template = Template((Path(__file__).parent / "landing.html").read_text(encoding="utf-8"))
     base = str(request.base_url).rstrip("/")
-    html = template.render(demo_employer=config.DEMO_EMPLOYER, base_url=base)
+    html = template.render(
+        demo_employer=config.DEMO_EMPLOYER,
+        base_url=base,
+        simple_analytics=config.SIMPLE_ANALYTICS_ENABLED,
+    )
     return HTMLResponse(html)
 
 
