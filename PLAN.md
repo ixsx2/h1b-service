@@ -119,9 +119,24 @@ CONTEXT.md, PLAN.md, README.md
 - CI fixes: no `secrets` in workflow `if` guards; `H1B_TESTING=1` disables rate limits in tests
 - `/healthz` reports `data_db`; startup fails fast if aggregates SQLite missing
 
+### Real-data validation progress (2026-07-07)
+
+- **USCIS FY2026 validated.** Real Employer Data Hub export ingested and
+  sanity-checked: 32,824 employer-year buckets, 52,726 initial approvals /
+  2,140 denials; top sponsors Infosys, TCS, Cognizant, IBM, Amazon, Google in
+  the expected order. Fixed three real-schema mismatches the synthetic fixtures
+  never exercised: file is **UTF-16 LE, tab-delimited** (build assumed UTF-8
+  comma); real columns are `Employer (Petitioner) Name` / `Fiscal Year   `
+  (trailing spaces) with **split petition-type** approval/denial columns, not a
+  single `Initial Approval`. "Initial" now = New Employment + New Concurrent
+  (USCIS's own definition), summed across those columns; Continuation / Change /
+  Amended excluded. New `USCIS_DATA_HUB` column map + `test_uscis_data_hub_real_schema`
+  regression test (32 passed, 2 skipped; ruff clean).
+
 ### Not done yet
 
-- Real DOL/USCIS ETL validation (`tests/fixtures/real/` empty → `test_real_etl` skipped).
+- Real **DOL** LCA ETL validation (the xlsx half — certified LCA counts, salary,
+  titles). `tests/fixtures/real/` still has no DOL file → `test_real_etl` skipped.
   **Blocked (2026-07-07):** `www.dol.gov` returns HTTP 403 to every non-interactive
   client — Akamai edge bot protection. Verified: templated `/data/` URLs, the
   `/pdfs/` path the performance page links to, and the performance page itself all

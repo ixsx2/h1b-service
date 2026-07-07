@@ -115,18 +115,49 @@ def ingest_dol_xlsx(path: Path, buckets: dict[tuple[str, int], YearBucket]) -> i
     return fy
 
 
+def _open_uscis(path: Path):
+    """Open a USCIS CSV, detecting UTF-16 (real Data Hub export, tab-delimited)
+    vs UTF-8 (synthetic fixture, comma-delimited) from the byte-order mark."""
+    with path.open("rb") as fh:
+        bom = fh.read(2)
+    if bom in (b"\xff\xfe", b"\xfe\xff"):
+        return path.open(newline="", encoding="utf-16"), "\t"
+    return path.open(newline="", encoding="utf-8-sig"), ","
+
+
+def _uscis_indices(header: tuple[str, ...], cols):
+    """Column indices, tolerant of trailing/leading whitespace in headers
+    (the real export has 'Fiscal Year   ')."""
+    stripped = [h.strip() for h in header]
+
+    def idx(name: str) -> int:
+        return stripped.index(name)
+
+    idx_emp = idx(cols.employer)
+    idx_fy = idx(cols.fiscal_year)
+    idx_app = [idx(c) for c in cols.approval_columns]
+    idx_den = [idx(c) for c in cols.denial_columns]
+    return idx_emp, idx_fy, idx_app, idx_den
+
+
+def _sum_cells(row: list[str], indices: list[int]) -> int:
+    total = 0
+    for i in indices:
+        total += int(str(row[i]).replace(",", "").strip() or 0)
+    return total
+
+
 def ingest_uscis_csv(path: Path, buckets: dict[tuple[str, int], YearBucket]) -> None:
-    with path.open(newline="", encoding="utf-8-sig") as fh:
-        reader = csv.reader(fh)
+    fh, delim = _open_uscis(path)
+    with fh:
+        reader = csv.reader(fh, delimiter=delim)
         header = tuple(next(reader, []))
         cols = resolve_uscis_columns(header)
-        idx_emp = header.index(cols.employer)
-        idx_fy = header.index(cols.fiscal_year)
-        idx_app = header.index(cols.initial_approval)
-        idx_den = header.index(cols.initial_denial)
+        idx_emp, idx_fy, idx_app, idx_den = _uscis_indices(header, cols)
+        max_idx = max([idx_emp, idx_fy, *idx_app, *idx_den])
 
         for row in reader:
-            if len(row) <= max(idx_emp, idx_fy, idx_app, idx_den):
+            if len(row) <= max_idx:
                 continue
             filed = row[idx_emp].strip()
             if not filed:
@@ -139,8 +170,8 @@ def ingest_uscis_csv(path: Path, buckets: dict[tuple[str, int], YearBucket]) -> 
             key = (canonical, fy)
             bucket = buckets.setdefault(key, YearBucket())
             try:
-                bucket.initial_approvals += int(str(row[idx_app]).replace(",", "") or 0)
-                bucket.initial_denials += int(str(row[idx_den]).replace(",", "") or 0)
+                bucket.initial_approvals += _sum_cells(row, idx_app)
+                bucket.initial_denials += _sum_cells(row, idx_den)
             except ValueError:
                 continue
 
@@ -310,11 +341,12 @@ def build_from_paths(
 
     for uscis_path in uscis_paths:
         ingest_uscis_csv(uscis_path, buckets)
-        with uscis_path.open(newline="", encoding="utf-8-sig") as fh:
-            reader = csv.reader(fh)
+        fh, delim = _open_uscis(uscis_path)
+        with fh:
+            reader = csv.reader(fh, delimiter=delim)
             header = tuple(next(reader, []))
             cols = resolve_uscis_columns(header)
-            idx_emp = header.index(cols.employer)
+            idx_emp = [h.strip() for h in header].index(cols.employer)
             for row in reader:
                 if len(row) <= idx_emp:
                     continue

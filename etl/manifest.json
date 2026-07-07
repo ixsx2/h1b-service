@@ -15,9 +15,10 @@
   ],
   "uscis": [
     {
-      "fiscal_year": 2025,
-      "filename": "H-1B Employer Data Hub FY2025.csv",
-      "url": ""
+      "fiscal_year": 2026,
+      "filename": "Employer Information.csv",
+      "url": "",
+      "_format": "UTF-16 LE, tab-delimited. Columns: 'Employer (Petitioner) Name', 'Fiscal Year' (trailing spaces), split petition-type approval/denial columns. Initial = New Employment + New Concurrent (see etl/column_maps.py USCIS_DATA_HUB). Validated against the real FY2026 export 2026-07-07: top sponsors Infosys/TCS/Cognizant/IBM as expected."
     }
   ],
   "_note": "USCIS CSV URLs change per release — paste the annual export URL from the Data Hub files page when available.",

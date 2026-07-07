@@ -18,8 +18,11 @@ class DolColumns:
 class UscisColumns:
     employer: str
     fiscal_year: str
-    initial_approval: str
-    initial_denial: str
+    # "Initial" approvals/denials are summed across these petition-type columns.
+    # The synthetic fixture ships single pre-summed columns; the real Data Hub
+    # export splits them by petition type (New Employment, New Concurrent, ...).
+    approval_columns: tuple[str, ...]
+    denial_columns: tuple[str, ...]
 
 
 # Modern OFLC disclosure layout (FY2020+)
@@ -40,18 +43,30 @@ DOL_LEGACY = DolColumns(
     wage_unit="LCA_CASE_WAGE_RATE_UNIT",
 )
 
+# Real USCIS H-1B Employer Data Hub annual export (UTF-16 LE, tab-delimited).
+# "Initial" = first-time petitions: New Employment + New Concurrent, matching
+# USCIS's own "Initial Approval/Denial" definition. Continuation, Change, and
+# Amended petitions are excluded (they are not new sponsorships).
+USCIS_DATA_HUB = UscisColumns(
+    employer="Employer (Petitioner) Name",
+    fiscal_year="Fiscal Year",
+    approval_columns=("New Employment Approval", "New Concurrent Approval"),
+    denial_columns=("New Employment Denial", "New Concurrent Denial"),
+)
+
+# Synthetic fixture layout: single pre-summed columns.
 USCIS_STANDARD = UscisColumns(
     employer="Employer",
     fiscal_year="Fiscal Year",
-    initial_approval="Initial Approval",
-    initial_denial="Initial Denial",
+    approval_columns=("Initial Approval",),
+    denial_columns=("Initial Denial",),
 )
 
 USCIS_LOWER = UscisColumns(
     employer="employer",
     fiscal_year="fiscal_year",
-    initial_approval="initial_approval",
-    initial_denial="initial_denial",
+    approval_columns=("initial_approval",),
+    denial_columns=("initial_denial",),
 )
 
 
@@ -72,6 +87,7 @@ def resolve_dol_columns(header: tuple[str, ...]) -> DolColumns | None:
 
 def resolve_uscis_columns(header: tuple[str, ...]) -> UscisColumns:
     header_set = {h.strip() for h in header}
-    if USCIS_STANDARD.employer in header_set:
-        return USCIS_STANDARD
+    for cols in (USCIS_DATA_HUB, USCIS_STANDARD, USCIS_LOWER):
+        if cols.employer in header_set:
+            return cols
     return USCIS_LOWER
