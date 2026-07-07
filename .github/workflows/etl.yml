@@ -42,15 +42,20 @@ jobs:
           retention-days: 90
 
       - name: Honeybadger check-in
-        if: ${{ secrets.HONEYBADGER_ETL_CHECKIN_URL != '' }}
+        env:
+          HONEYBADGER_ETL_CHECKIN_URL: ${{ secrets.HONEYBADGER_ETL_CHECKIN_URL }}
         run: |
-          curl -fsS -g "${{ secrets.HONEYBADGER_ETL_CHECKIN_URL }}" || \
-            echo "::warning::Honeybadger check-in failed"
+          if [ -n "$HONEYBADGER_ETL_CHECKIN_URL" ]; then
+            curl -fsS -g "$HONEYBADGER_ETL_CHECKIN_URL" || \
+              echo "::warning::Honeybadger check-in failed"
+          fi
 
       - name: Notify on failure
         if: failure()
+        env:
+          HONEYBADGER_ETL_CHECKIN_URL: ${{ secrets.HONEYBADGER_ETL_CHECKIN_URL }}
         run: |
           echo "::error::Quarterly ETL failed — inspect download URLs in etl/manifest.json"
-          if [ -n "${{ secrets.HONEYBADGER_ETL_CHECKIN_URL }}" ]; then
-            curl -fsS -g "${{ secrets.HONEYBADGER_ETL_CHECKIN_URL }}/fail" || true
+          if [ -n "$HONEYBADGER_ETL_CHECKIN_URL" ]; then
+            curl -fsS -g "$HONEYBADGER_ETL_CHECKIN_URL/fail" || true
           fi
