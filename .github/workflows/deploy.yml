@@ -8,23 +8,37 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    if: ${{ secrets.HEROKU_API_KEY != '' && secrets.HEROKU_APP_NAME != '' }}
     steps:
+      - name: Check Heroku secrets
+        id: gate
+        run: |
+          if [ -z "${{ secrets.HEROKU_API_KEY }}" ] || [ -z "${{ secrets.HEROKU_APP_NAME }}" ]; then
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Deploy skipped — set HEROKU_API_KEY, HEROKU_APP_NAME, and HEROKU_EMAIL repo secrets."
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - uses: actions/checkout@v4
+        if: steps.gate.outputs.ready == 'true'
 
       - uses: actions/setup-python@v5
+        if: steps.gate.outputs.ready == 'true'
         with:
           python-version: "3.12"
 
       - name: Install package
+        if: steps.gate.outputs.ready == 'true'
         run: pip install -e .
 
       - name: Build aggregates database
+        if: steps.gate.outputs.ready == 'true'
         run: |
           python tests/fixtures/generate_fixtures.py
           python scripts/build_data.py --source fixtures
 
       - name: Bundle data into deploy commit
+        if: steps.gate.outputs.ready == 'true'
         run: |
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git config user.name "github-actions[bot]"
@@ -32,23 +46,16 @@ jobs:
           git diff --staged --quiet || git commit -m "ci: ship h1b_data.db with release"
 
       - name: Deploy to Heroku
+        if: steps.gate.outputs.ready == 'true'
         uses: akhileshns/heroku-deploy@v4.2.0
         with:
           heroku_api_key: ${{ secrets.HEROKU_API_KEY }}
           heroku_app_name: ${{ secrets.HEROKU_APP_NAME }}
           heroku_email: ${{ secrets.HEROKU_EMAIL }}
           usedocker: false
-          justlogin: false
 
       - name: Smoke healthz + demo
+        if: steps.gate.outputs.ready == 'true'
         env:
           HEROKU_APP_URL: https://${{ secrets.HEROKU_APP_NAME }}.herokuapp.com
         run: python scripts/smoke.py --base-url "$HEROKU_APP_URL"
-
-  deploy-skipped:
-    runs-on: ubuntu-latest
-    if: ${{ secrets.HEROKU_API_KEY == '' || secrets.HEROKU_APP_NAME == '' }}
-    steps:
-      - run: |
-          echo "Deploy skipped — set HEROKU_API_KEY, HEROKU_APP_NAME, and HEROKU_EMAIL repo secrets."
-          echo "Workflow is ready; push again after secrets are configured."

@@ -100,14 +100,14 @@ CONTEXT.md, PLAN.md, README.md
 | 1 | ETL (synthetic fixtures) + signal logic + local API + pytest | **Done** (2026-07-07) |
 | 2 | Landing + OTP/key flow + Testmail e2e (CI job wired, skips without secrets) | **Done** |
 | 2b | Deploy prep: Heroku manifest, GitHub workflows, ETL cron, smoke script | **Done** |
-| 3 | Live deploy: Heroku + Postgres + `.dev` domain + Resend DKIM + funnel smoke | **Blocked on Ishan** |
+| 3 | Live deploy: Heroku + Postgres + `.dev` domain + Resend DKIM + funnel smoke | **In progress** — repo live; CI fixed; awaiting Heroku/Resend secrets |
 | 4 | Monitoring (Sentry, Datadog, Honeybadger, SimpleAnalytics) + publish | Not started |
 
 ## Blocked on Ishan (blocks Phase 3 — live deploy)
 
+- ~~Create public GitHub repo (`github.com/ixsx2/h1b-service`) and push~~ **Done**
 - Pick public name + redeem Name.com `.dev` domain from Student Pack
-- Redeem Heroku credit; create Heroku app + link to GitHub repo
-- Create public GitHub repo (`github.com/ixsx2/...`) and push this code
+- Redeem Heroku credit; create Heroku app (`python scripts/heroku_bootstrap.py` for commands)
 - Create Resend account; set `RESEND_API_KEY` + `EMAIL_FROM` after DKIM
 - Redeem Testmail; set `TESTMAIL_API_KEY` + `TESTMAIL_NAMESPACE` GitHub secrets
 - Paste USCIS CSV URL into `etl/manifest.json` (DOL URLs templated; verify after OFLC releases)
@@ -115,6 +115,8 @@ CONTEXT.md, PLAN.md, README.md
 
 Checklist: [docs/deploy.md](docs/deploy.md). GitHub secrets for deploy:
 `HEROKU_API_KEY`, `HEROKU_APP_NAME`, `HEROKU_EMAIL`.
+
+Future integration with Sponsorly / Sponsor Check: [docs/future-considerations.md](docs/future-considerations.md).
 
 ## Verification bar before "live"
 

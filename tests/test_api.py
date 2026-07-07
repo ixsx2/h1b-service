@@ -6,7 +6,9 @@ from app.email import captured_emails
 
 
 def test_healthz(client):
-    assert client.get("/healthz").json() == {"status": "ok"}
+    body = client.get("/healthz").json()
+    assert body["status"] == "ok"
+    assert body["data_db"] is True
 
 
 def test_demo_returns_signal(client):

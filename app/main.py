@@ -34,6 +34,8 @@ def _init_dbs() -> None:
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     _init_dbs()
+    if not config.H1B_DATA_DB.exists():
+        raise RuntimeError(f"Aggregates database missing: {config.H1B_DATA_DB}")
     user_db.init_schema()
     yield
 
@@ -98,8 +100,12 @@ def landing(request: Request) -> HTMLResponse:
 
 
 @app.get("/healthz")
-def healthz() -> dict[str, str]:
-    return {"status": "ok"}
+def healthz() -> dict:
+    data_ok = config.H1B_DATA_DB.exists()
+    return {
+        "status": "ok" if data_ok else "degraded",
+        "data_db": data_ok,
+    }
 
 
 @app.get("/v1/demo")

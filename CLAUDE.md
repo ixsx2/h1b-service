@@ -3,9 +3,9 @@
 Public-ready pilot API: "would this company sponsor an H-1B?" built from DOL
 LCA disclosure files + USCIS Employer Data Hub.
 
-**Status:** Phase 1 + deploy prep complete (2026-07-07). **Next:** Phase 3 live
-deploy — blocked on Ishan's domain, GitHub remote, Heroku app, Resend, Testmail.
-See [docs/deploy.md](docs/deploy.md).
+**Status:** Phase 1 + deploy prep complete. **Phase 3 in progress** — repo at
+https://github.com/ixsx2/h1b-service; awaiting Heroku + Resend secrets for live deploy.
+See [docs/deploy.md](docs/deploy.md). Sponsorly integration notes: [docs/future-considerations.md](docs/future-considerations.md).
 
 ## Read before working (in this order)
 
@@ -13,6 +13,7 @@ See [docs/deploy.md](docs/deploy.md).
 2. `CONTEXT.md` — domain glossary (Canonical Employer, Signal Tier, etc.).
 3. `docs/adr/` — recorded decisions; contradict only by superseding an ADR.
 4. `docs/deploy.md` — when touching CI/CD, Heroku, or secrets wiring.
+5. `docs/future-considerations.md` — Sponsorly vs this API; integration deferred.
 
 ## Hard rules
 

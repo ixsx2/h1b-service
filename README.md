@@ -10,7 +10,7 @@ disclosure files and the USCIS H-1B Employer Data Hub.
 | Phase 1 — ETL, signal logic, local API, pytest | Done |
 | Phase 2 — landing, OTP flow, mock-email e2e | Done |
 | Phase 2b — deploy prep (workflows, Heroku manifest, ETL cron) | Done |
-| Phase 3 — live deploy (Heroku, Postgres, domain, Resend) | **Blocked on you** |
+| Phase 3 — live deploy (Heroku, Postgres, domain, Resend) | **In progress** — [repo](https://github.com/ixsx2/h1b-service) live |
 
 Tests: **31 passed, 2 skipped** (`test_real_etl`, `test_testmail_e2e`).
 
@@ -68,6 +68,10 @@ Errors: `{"error": "...", "hint": "..."}`.
 
 ## Deploy (when ready)
 
+```bash
+python scripts/heroku_bootstrap.py   # prints heroku + GitHub secret commands
+```
+
 1. Set GitHub secrets: `HEROKU_API_KEY`, `HEROKU_APP_NAME`, `HEROKU_EMAIL`
 2. Heroku config: `OTP_SECRET`, `RESEND_API_KEY`, `EMAIL_FROM`, `DATABASE_URL` (from Postgres addon)
 3. Push to `main` / run **Deploy** workflow
@@ -107,4 +111,5 @@ GROUP BY 1 ORDER BY 2 DESC LIMIT 20;
 - [PLAN.md](PLAN.md) — settled decisions and phases
 - [CONTEXT.md](CONTEXT.md) — domain glossary
 - [docs/deploy.md](docs/deploy.md) — Heroku, secrets, DNS, smoke
+- [docs/future-considerations.md](docs/future-considerations.md) — Sponsorly positioning + deferred integration
 - [docs/adr/](docs/adr/) — architecture decisions

@@ -37,6 +37,8 @@ git push -u origin master
 | `TESTMAIL_NAMESPACE` | `ci.yml` Testmail job |
 | `HONEYBADGER_ETL_CHECKIN_URL` | `etl.yml` (optional) |
 
+Or run `python scripts/heroku_bootstrap.py` for a generated command checklist.
+
 ### 3. Heroku app
 
 ```bash
