@@ -20,5 +20,6 @@
       "url": ""
     }
   ],
-  "_note": "USCIS CSV URLs change per release — paste the annual export URL from the Data Hub files page when available."
+  "_note": "USCIS CSV URLs change per release — paste the annual export URL from the Data Hub files page when available.",
+  "_dol_download_blocked": "As of 2026-07-07 www.dol.gov returns HTTP 403 to all non-interactive clients (Akamai edge bot protection) — the templated URLs above, the /sites/.../data/ path AND the /sites/.../pdfs/ path all 403 even with full browser headers + Referer. Automated etl.download cannot fetch DOL files. Manual path: download the FY xlsx in a browser from https://www.dol.gov/agencies/eta/foreign-labor/performance, drop into data/sources/ (or tests/fixtures/real/), then `python scripts/build_data.py --source manifest`. USCIS host (uscis.gov) is NOT blocked; its files page is https://www.uscis.gov/tools/reports-and-studies/h-1b-employer-data-hub/h-1b-employer-data-hub-files (covers through FY2026 Q2)."
 }

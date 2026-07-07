@@ -121,7 +121,17 @@ CONTEXT.md, PLAN.md, README.md
 
 ### Not done yet
 
-- Real DOL/USCIS ETL validation (`tests/fixtures/real/` empty → `test_real_etl` skipped)
+- Real DOL/USCIS ETL validation (`tests/fixtures/real/` empty → `test_real_etl` skipped).
+  **Blocked (2026-07-07):** `www.dol.gov` returns HTTP 403 to every non-interactive
+  client — Akamai edge bot protection. Verified: templated `/data/` URLs, the
+  `/pdfs/` path the performance page links to, and the performance page itself all
+  403 even with a full browser UA + Accept + Referer; WebFetch and firecrawl(no key)
+  also blocked; `catalog.data.gov` only redirects back to the blocked page. So
+  `etl.download` cannot fetch DOL files automatically. USCIS host (`uscis.gov`) is
+  reachable. Path forward is a **manual browser download** into `data/sources/`
+  then `python scripts/build_data.py --source manifest` (see manifest `_note`),
+  or a browser-driven fetch (firecrawl/Playwright with a real key) if automation
+  is wanted later.
 - Live Heroku deploy, custom domain, Resend DKIM, full OTP funnel on production URL
 - Phase 4 monitoring (Sentry, Honeybadger, SimpleAnalytics on production)
 
@@ -148,7 +158,9 @@ CONTEXT.md, PLAN.md, README.md
 
 ### Either — before calling production "live"
 
-7. Download FY2025/FY2026 DOL xlsx + USCIS CSV → `tests/fixtures/real/`; update `etl/manifest.json`
+7. Download FY2025/FY2026 DOL xlsx + USCIS CSV → `tests/fixtures/real/`; update `etl/manifest.json`.
+   DOL requires a **manual browser download** (Akamai 403s automation — see "Not done yet");
+   USCIS CSV from the Data Hub files page is fetchable normally.
 8. `pytest tests/test_real_etl.py -v` then redeploy (real `h1b_data.db` in slug)
 9. Testmail secrets → CI runs real OTP e2e
 

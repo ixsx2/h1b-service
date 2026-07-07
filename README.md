@@ -42,6 +42,11 @@ DOL/USCIS build required before calling the service "live."
 ### Before "live" label
 
 7. Real FY2025/FY2026 DOL + USCIS files → `tests/fixtures/real/` → `pytest tests/test_real_etl.py`
+   **Manual step required:** `www.dol.gov` returns HTTP 403 to all non-interactive
+   clients (Akamai bot protection), so `etl.download` cannot fetch DOL xlsx files.
+   Download them in a browser from the [OFLC performance page](https://www.dol.gov/agencies/eta/foreign-labor/performance),
+   drop into `data/sources/`, then `python scripts/build_data.py --source manifest`.
+   USCIS host is not blocked — grab the CSV from the [Data Hub files page](https://www.uscis.gov/tools/reports-and-studies/h-1b-employer-data-hub/h-1b-employer-data-hub-files).
 8. Optional: Testmail secrets for CI OTP e2e
 
 ### After live
