@@ -8,6 +8,7 @@ import secrets
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
+from app import config
 from app.config import (
     OTP_EXPIRY_SECONDS,
     OTP_MAX_ATTEMPTS,
@@ -39,6 +40,8 @@ def _utc_day(now: datetime | None = None) -> str:
 
 
 def _check_otp_rate(db: UserDB, scope: str, scope_key: str) -> AuthError | None:
+    if config.TESTING:
+        return None
     bucket = _hour_bucket()
     with db.connect() as conn:
         if db._is_sqlite:

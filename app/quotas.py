@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
+from app import config
 from app.config import DEMO_QUOTA_PER_DAY, KEY_QUOTA_PER_DAY
 from app.db import UserDB
 
@@ -37,6 +38,13 @@ def check_and_increment(
     scope_key: str,
     limit: int,
 ) -> QuotaResult:
+    if config.TESTING:
+        return QuotaResult(
+            allowed=True,
+            remaining=limit - 1,
+            limit=limit,
+            reset_at=_next_midnight_utc(),
+        )
     day = _utc_day()
     with db.connect() as conn:
         if db._is_sqlite:

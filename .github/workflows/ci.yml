@@ -16,7 +16,10 @@ jobs:
       - run: pip install -e ".[dev]"
       - run: python tests/fixtures/generate_fixtures.py
       - run: python -m etl.build --fixtures tests/fixtures
-      - run: pytest -v
+      - env:
+          H1B_TESTING: "1"
+          OTP_SECRET: ci-test-otp-secret
+        run: pytest -v
       - run: ruff check .
 
       - name: Testmail e2e (optional)

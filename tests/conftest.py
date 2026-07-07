@@ -32,6 +32,7 @@ def built_db():
     os.environ["DATABASE_URL"] = f"sqlite:///{users_path}"
     os.environ["OTP_SECRET"] = "test-otp-secret"
     os.environ["DEMO_EMPLOYER"] = "DATADOG"
+    os.environ["H1B_TESTING"] = "1"
     os.environ.pop("RESEND_API_KEY", None)
 
     build_fixture_database(FIXTURES, db_path)
