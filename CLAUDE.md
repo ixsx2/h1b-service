@@ -3,16 +3,16 @@
 Public-ready pilot API: "would this company sponsor an H-1B?" built from DOL
 LCA disclosure files + USCIS Employer Data Hub.
 
-**Status:** Phase 1 + deploy prep complete. **Phase 3 in progress** — repo at
-https://github.com/ixsx2/h1b-service; awaiting Heroku + Resend secrets for live deploy.
-See [docs/deploy.md](docs/deploy.md). Sponsorly integration notes: [docs/future-considerations.md](docs/future-considerations.md).
+**Status (2026-07-07):** Phases 1–2b **done**. Phase 3 **in progress** — repo
+https://github.com/ixsx2/h1b-service, CI green (31 passed). Live deploy blocked
+on Heroku app + Resend + `.dev` domain. Next: [PLAN.md § Next steps](PLAN.md#next-steps-priority-order).
 
 ## Read before working (in this order)
 
-1. `PLAN.md` — settled decisions, frozen API surface, tier thresholds, phases.
+1. `PLAN.md` — settled decisions, phase status, **work completed**, **next steps**.
 2. `CONTEXT.md` — domain glossary (Canonical Employer, Signal Tier, etc.).
 3. `docs/adr/` — recorded decisions; contradict only by superseding an ADR.
-4. `docs/deploy.md` — when touching CI/CD, Heroku, or secrets wiring.
+4. `docs/deploy.md` — Heroku, GitHub secrets, DNS, smoke tests.
 5. `docs/future-considerations.md` — Sponsorly vs this API; integration deferred.
 
 ## Hard rules
@@ -35,12 +35,12 @@ See [docs/deploy.md](docs/deploy.md). Sponsorly integration notes: [docs/future-
 
 ## Verification bar
 
-Every change lands with tests (pytest; ruff clean). Current: **31 passed, 2
-skipped** (real ETL, Testmail e2e). Signal-tier and lookup-semantics changes
-need table-driven cases. Testmail OTP e2e runs in CI when
-`TESTMAIL_API_KEY` + `TESTMAIL_NAMESPACE` secrets are set. Before Phase 3 is
-called done: live funnel smoke on the deployed URL (visit → demo → signup →
-key → signal); ETL column maps validated against real DOL/USCIS files.
+Every change lands with tests (pytest; ruff clean). **CI:** 31 passed, 2 skipped.
+Skipped: `test_real_etl` (no real DOL/USCIS files), `test_testmail_e2e` (no
+Testmail secrets). `H1B_TESTING=1` in CI disables OTP/demo rate limits.
+
+**Phase 3 done when:** Heroku URL serves demo + OTP → key → `/v1/signal`;
+real-file ETL validated; engagement SQL runnable on production Postgres.
 
 ## Engagement (why the pilot exists)
 

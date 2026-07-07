@@ -1,8 +1,8 @@
 # H1B Data Service — Pilot Plan
 
-Status: **Phase 1 + deploy prep complete** (2026-07-07). CP0–CP5 landed; Phase 2b
-(workflows, `app.json`, ETL cron, `docs/deploy.md`) landed same day. **Phase 3**
-(first live deploy) blocked on domain, GitHub remote, Heroku app, Resend, Testmail.
+Status: **Phases 1–2b complete; Phase 3 in progress** (2026-07-07). Public repo
+live at https://github.com/ixsx2/h1b-service — CI and Deploy workflows green.
+First Heroku push awaits Ishan's secrets (Heroku app, Resend, `.dev` domain).
 Real-file ETL test skips until DOL/USCIS files in `tests/fixtures/real/`.
 Read [CONTEXT.md](CONTEXT.md) for domain terms and [docs/adr/](docs/adr/) for
 recorded decisions before changing anything here.
@@ -84,14 +84,46 @@ data-engineering portfolio artifact.
 ```
 app/              main.py, auth.py, signal.py, quotas.py, db.py, lookup.py, landing.html
 etl/              build.py, column_maps.py, sources.py, download.py, manifest.json
-scripts/          build_data.py, smoke.py
+scripts/          build_data.py, smoke.py, heroku_bootstrap.py
 bin/              post_compile (Heroku buildpack hook)
 tests/            signal, ETL, API, lookup, e2e, testmail (CI-gated), real_etl (skipped)
 .github/workflows/  ci.yml, deploy.yml, etl.yml
-docs/             adr/, deploy.md
+docs/             adr/, deploy.md, future-considerations.md
 Dockerfile / Procfile / app.json / runtime.txt
 CONTEXT.md, PLAN.md, README.md
 ```
+
+## Work completed (2026-07-07)
+
+### Phase 1 — CP0–CP5 (implementation)
+
+- Repo scaffold: `pyproject.toml`, `app/`, `etl/`, `Procfile`, `Dockerfile`, tests
+- ETL: `build.py`, `column_maps.py`, `sources.py`, `canonicalize.py`; synthetic fixtures
+- Signal logic: tiers, trend, denial rate; table-driven pytest
+- API: six frozen routes, OTP auth, quotas, FTS5 lookup, landing page
+- E2E: mock-email OTP → key → signal (`tests/test_e2e.py`)
+
+### Phase 2b — deploy prep
+
+- `app.json`, `runtime.txt`, `bin/post_compile`, release-phase Postgres init
+- GitHub Actions: `ci.yml`, `deploy.yml`, `etl.yml` (quarterly cron)
+- `etl/download.py`, `etl/manifest.json`, `scripts/build_data.py`, `scripts/smoke.py`
+- `docs/deploy.md`, `scripts/heroku_bootstrap.py`
+- `docs/future-considerations.md` (Sponsorly vs this API; integration deferred)
+
+### Phase 3 — started
+
+- Public GitHub repo created and pushed: `ixsx2/h1b-service`
+- CI green: **31 passed, 2 skipped** (`test_real_etl`, `test_testmail_e2e`)
+- Deploy workflow green; skips Heroku push until `HEROKU_*` secrets set
+- CI fixes: no `secrets` in workflow `if` guards; `H1B_TESTING=1` disables rate limits in tests
+- `/healthz` reports `data_db`; startup fails fast if aggregates SQLite missing
+
+### Not done yet
+
+- Real DOL/USCIS ETL validation (`tests/fixtures/real/` empty → `test_real_etl` skipped)
+- Live Heroku deploy, custom domain, Resend DKIM, full OTP funnel on production URL
+- Phase 4 monitoring (Sentry, Honeybadger, SimpleAnalytics on production)
 
 ## Phases
 
@@ -100,10 +132,32 @@ CONTEXT.md, PLAN.md, README.md
 | 1 | ETL (synthetic fixtures) + signal logic + local API + pytest | **Done** (2026-07-07) |
 | 2 | Landing + OTP/key flow + Testmail e2e (CI job wired, skips without secrets) | **Done** |
 | 2b | Deploy prep: Heroku manifest, GitHub workflows, ETL cron, smoke script | **Done** |
-| 3 | Live deploy: Heroku + Postgres + `.dev` domain + Resend DKIM + funnel smoke | **In progress** — repo live; CI fixed; awaiting Heroku/Resend secrets |
+| 3 | Live deploy: Heroku + Postgres + `.dev` domain + Resend DKIM + funnel smoke | **In progress** — CI/deploy workflows green; no Heroku secrets yet |
 | 4 | Monitoring (Sentry, Datadog, Honeybadger, SimpleAnalytics) + publish | Not started |
 
-## Blocked on Ishan (blocks Phase 3 — live deploy)
+## Next steps (priority order)
+
+### Ishan — unblocks live URL
+
+1. Pick public name; redeem Name.com `.dev` domain (Student Pack)
+2. `heroku login` → create app + Postgres → set GitHub secrets (`HEROKU_API_KEY`, `HEROKU_APP_NAME`, `HEROKU_EMAIL`) — see `python scripts/heroku_bootstrap.py`
+3. Re-run **Deploy** workflow or push to `master`
+4. Resend account + DKIM on domain → `RESEND_API_KEY`, `EMAIL_FROM` on Heroku
+5. `heroku domains:add` + Name.com DNS
+6. Full smoke: `python scripts/smoke.py --base-url https://yourname.dev --email … --otp-code …`
+
+### Either — before calling production "live"
+
+7. Download FY2025/FY2026 DOL xlsx + USCIS CSV → `tests/fixtures/real/`; update `etl/manifest.json`
+8. `pytest tests/test_real_etl.py -v` then redeploy (real `h1b_data.db` in slug)
+9. Testmail secrets → CI runs real OTP e2e
+
+### After live — Phase 4
+
+10. `SIMPLE_ANALYTICS=1`, Sentry, Honeybadger ETL check-in
+11. Publish; track engagement SQL from README
+
+## Blocked on Ishan (Phase 3 remainder)
 
 - ~~Create public GitHub repo (`github.com/ixsx2/h1b-service`) and push~~ **Done**
 - Pick public name + redeem Name.com `.dev` domain from Student Pack
