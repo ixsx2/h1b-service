@@ -1,0 +1,43 @@
+[project]
+name = "h1b-service"
+version = "0.1.0"
+description = "H-1B sponsorship signal API from DOL LCA + USCIS Employer Data Hub"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.32.0",
+    "openpyxl>=3.1.5",
+    "psycopg[binary]>=3.2.0",
+    "httpx>=0.28.0",
+    "jinja2>=3.1.4",
+    "email-validator>=2.2.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3.0",
+    "pytest-asyncio>=0.24.0",
+    "ruff>=0.8.0",
+]
+
+[project.scripts]
+h1b-etl = "etl.build:main"
+
+[build-system]
+requires = ["setuptools>=75.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["app*", "etl*"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP"]

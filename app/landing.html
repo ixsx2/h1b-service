@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>H-1B Sponsorship Signal</title>
+  <style>
+    :root { font-family: system-ui, sans-serif; color: #1a1a1a; background: #faf9f7; }
+    body { max-width: 720px; margin: 2rem auto; padding: 0 1rem; line-height: 1.5; }
+    h1 { font-size: 1.75rem; margin-bottom: 0.25rem; }
+    .tagline { color: #555; margin-bottom: 1.5rem; }
+    section { background: #fff; border: 1px solid #e0ddd6; border-radius: 8px; padding: 1.25rem; margin-bottom: 1rem; }
+    label { display: block; font-weight: 600; margin-bottom: 0.25rem; }
+    input { width: 100%; padding: 0.5rem; margin-bottom: 0.75rem; box-sizing: border-box; }
+    button { background: #1a4d2e; color: #fff; border: none; padding: 0.5rem 1rem; border-radius: 4px; cursor: pointer; }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    pre { background: #f4f2ee; padding: 0.75rem; overflow-x: auto; font-size: 0.85rem; border-radius: 4px; }
+    .tabs { display: flex; gap: 0.5rem; margin-bottom: 0.5rem; }
+    .tab { background: none; border: 1px solid #ccc; color: #333; }
+    .tab.active { background: #1a4d2e; color: #fff; border-color: #1a4d2e; }
+    .hidden { display: none; }
+    .msg { margin-top: 0.5rem; font-size: 0.9rem; }
+    .err { color: #a00; }
+    .ok { color: #1a4d2e; }
+    code { background: #f4f2ee; padding: 0.1rem 0.3rem; border-radius: 3px; }
+  </style>
+</head>
+<body>
+  <h1>H-1B Sponsorship Signal</h1>
+  <p class="tagline">Would this company sponsor an H-1B? Graded from DOL LCA + USCIS petition data.</p>
+
+  <section id="demo">
+    <h2>Try the demo</h2>
+    <p>Live example for <strong>{{ demo_employer }}</strong> — 30 lookups/day per IP.</p>
+    <button type="button" id="demo-btn">Run demo</button>
+    <div class="tabs" style="margin-top:1rem">
+      <button type="button" class="tab active" data-tab="card">Card</button>
+      <button type="button" class="tab" data-tab="json">Raw JSON</button>
+    </div>
+    <div id="demo-card" class="demo-view"></div>
+    <pre id="demo-json" class="demo-view hidden"></pre>
+  </section>
+
+  <section id="auth">
+    <h2>Get an API key</h2>
+    <p>Passwordless — we email a 6-digit code. Same flow for signup and login.</p>
+    <label for="email">Email</label>
+    <input type="email" id="email" placeholder="you@example.com" autocomplete="email">
+    <button type="button" id="code-btn">Send code</button>
+    <div id="code-msg" class="msg"></div>
+    <div id="verify-block" class="hidden">
+      <label for="otp">Verification code</label>
+      <input type="text" id="otp" inputmode="numeric" maxlength="6" placeholder="123456">
+      <button type="button" id="verify-btn">Verify &amp; get key</button>
+    </div>
+    <div id="key-block" class="hidden">
+      <p class="ok">Your API key (shown once):</p>
+      <pre id="api-key"></pre>
+    </div>
+  </section>
+
+  <section>
+    <h2>Quickstart</h2>
+    <pre id="curl-example">curl -H "Authorization: Bearer YOUR_KEY" \
+  "{{ base_url }}/v1/signal?company=Datadog"</pre>
+  </section>
+
+  <script>
+    const base = "{{ base_url }}";
+    document.querySelectorAll('.tab').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.tab').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        const tab = btn.dataset.tab;
+        document.querySelectorAll('.demo-view').forEach(el => el.classList.add('hidden'));
+        document.getElementById(tab === 'card' ? 'demo-card' : 'demo-json').classList.remove('hidden');
+      });
+    });
+
+    function renderCard(data) {
+      if (data.error) return `<p class="err">${data.error}: ${data.hint || ''}</p>`;
+      const s = data.signal || data;
+      return `<p><strong>Tier:</strong> ${s.tier}</p>
+        <p><strong>Trend:</strong> ${s.trend ?? 'n/a'}</p>
+        <p><strong>Denial rate:</strong> ${s.denial_rate ?? 'n/a'}${s.denial_caution ? ' ⚠' : ''}</p>
+        <p><strong>Employer:</strong> ${data.canonical_employer || data.matched_as || '—'}</p>`;
+    }
+
+    document.getElementById('demo-btn').addEventListener('click', async () => {
+      const btn = document.getElementById('demo-btn');
+      btn.disabled = true;
+      try {
+        const r = await fetch(base + '/v1/demo');
+        const data = await r.json();
+        document.getElementById('demo-card').innerHTML = renderCard(data);
+        document.getElementById('demo-json').textContent = JSON.stringify(data, null, 2);
+        if (!r.ok) document.getElementById('demo-card').innerHTML = renderCard(data);
+      } finally { btn.disabled = false; }
+    });
+
+    document.getElementById('code-btn').addEventListener('click', async () => {
+      const email = document.getElementById('email').value.trim();
+      const msg = document.getElementById('code-msg');
+      msg.textContent = '';
+      const r = await fetch(base + '/auth/code', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      });
+      const data = await r.json();
+      if (r.ok) {
+        msg.className = 'msg ok';
+        msg.textContent = 'Code sent — check your email.';
+        document.getElementById('verify-block').classList.remove('hidden');
+      } else {
+        msg.className = 'msg err';
+        msg.textContent = (data.hint || data.error || 'Failed');
+      }
+    });
+
+    document.getElementById('verify-btn').addEventListener('click', async () => {
+      const email = document.getElementById('email').value.trim();
+      const code = document.getElementById('otp').value.trim();
+      const r = await fetch(base + '/auth/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, code }),
+      });
+      const data = await r.json();
+      if (r.ok && data.api_key) {
+        document.getElementById('key-block').classList.remove('hidden');
+        document.getElementById('api-key').textContent = data.api_key;
+        document.getElementById('curl-example').textContent =
+          `curl -H "Authorization: Bearer ${data.api_key}" \\\n  "${base}/v1/signal?company=Datadog"`;
+      } else {
+        document.getElementById('code-msg').className = 'msg err';
+        document.getElementById('code-msg').textContent = data.hint || data.error || 'Verify failed';
+      }
+    });
+  </script>
+</body>
+</html>
