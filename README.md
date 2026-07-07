@@ -5,7 +5,7 @@ disclosure files and the USCIS H-1B Employer Data Hub.
 
 ## Status
 
-Phase 1 in progress: ETL, signal logic, local API, and test suite.
+Phase 1 complete (local API + tests). Next: deploy to Heroku with Postgres, Resend, and a `.dev` domain.
 
 ## Quick start (local)
 
