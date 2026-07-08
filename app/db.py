@@ -45,8 +45,9 @@ class AggregatesDB:
             rows = conn.execute(
                 """
                 SELECT fiscal_year, certified_count, salary_median, salary_min,
-                       salary_max, top_titles, uscis_initial_approvals,
-                       uscis_initial_denials
+                       salary_max, top_titles, uscis_new_approvals,
+                       uscis_new_denials, uscis_transfer_approvals,
+                       uscis_transfer_denials
                 FROM aggregates
                 WHERE canonical_employer = ?
                 ORDER BY fiscal_year
@@ -63,8 +64,10 @@ class AggregatesDB:
                     "salary_min": r["salary_min"],
                     "salary_max": r["salary_max"],
                     "top_titles": json.loads(r["top_titles"]),
-                    "uscis_initial_approvals": r["uscis_initial_approvals"],
-                    "uscis_initial_denials": r["uscis_initial_denials"],
+                    "uscis_new_approvals": r["uscis_new_approvals"],
+                    "uscis_new_denials": r["uscis_new_denials"],
+                    "uscis_transfer_approvals": r["uscis_transfer_approvals"],
+                    "uscis_transfer_denials": r["uscis_transfer_denials"],
                 }
             )
         return result
