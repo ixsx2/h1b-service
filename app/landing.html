@@ -83,9 +83,13 @@
     function renderCard(data) {
       if (data.error) return `<p class="err">${data.error}: ${data.hint || ''}</p>`;
       const s = data.signal || data;
+      const block = b => b
+        ? `${b.denial_rate ?? 'n/a'}${b.caution ? ' ⚠' : ''} (${b.approvals} approved / ${b.denials} denied)`
+        : 'n/a';
       return `<p><strong>Tier:</strong> ${s.tier}</p>
         <p><strong>Trend:</strong> ${s.trend ?? 'n/a'}</p>
-        <p><strong>Denial rate:</strong> ${s.denial_rate ?? 'n/a'}${s.denial_caution ? ' ⚠' : ''}</p>
+        <p><strong>New H-1B (fresh/cap) denial rate:</strong> ${block(s.new_h1b)}</p>
+        <p><strong>Transfers (already on H-1B) denial rate:</strong> ${block(s.transfers)}</p>
         <p><strong>Employer:</strong> ${data.canonical_employer || data.matched_as || '—'}</p>`;
     }
 

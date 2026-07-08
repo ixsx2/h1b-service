@@ -64,6 +64,17 @@ def _error(status: int, error: str, hint: str) -> JSONResponse:
     return JSONResponse(status_code=status, content={"error": error, "hint": hint})
 
 
+def _block_payload(block) -> dict | None:
+    if block is None:
+        return None
+    return {
+        "approvals": block.approvals,
+        "denials": block.denials,
+        "denial_rate": block.denial_rate,
+        "caution": block.caution,
+    }
+
+
 def _signal_payload(canonical: str, matched_as: str | None = None) -> dict:
     rows = aggregates_db.employer_aggregates(canonical)
     signal = build_signal(rows, aggregates_db.latest_complete_fy())
@@ -73,8 +84,8 @@ def _signal_payload(canonical: str, matched_as: str | None = None) -> dict:
         "signal": {
             "tier": signal.tier,
             "trend": signal.trend,
-            "denial_rate": signal.denial_rate,
-            "denial_caution": signal.denial_caution,
+            "new_h1b": _block_payload(signal.new_h1b),
+            "transfers": _block_payload(signal.transfers),
             "certified_by_year": [
                 {"fiscal_year": c.fiscal_year, "certified": c.certified}
                 for c in signal.certified_by_year

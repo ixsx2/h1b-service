@@ -2,7 +2,35 @@
 
 from __future__ import annotations
 
+import pytest
+
 from app.email import captured_emails
+
+
+def test_demo_signal_has_split_denial_blocks(client):
+    r = client.get("/v1/demo")
+    assert r.status_code == 200
+    s = r.json()["signal"]
+    assert "denial_rate" not in s  # clean break, no flat alias
+    assert s["new_h1b"] == {
+        "approvals": 50,
+        "denials": 5,
+        "denial_rate": pytest.approx(0.0909, rel=1e-3),
+        "caution": False,
+    }
+    assert s["transfers"] is None  # legacy fixture CSV has no breakout
+
+
+def test_employer_detail_exposes_split_uscis_columns(client, api_key):
+    r = client.get(
+        "/v1/employer/Datadog",
+        headers={"Authorization": f"Bearer {api_key}"},
+    )
+    assert r.status_code == 200
+    row_2025 = next(a for a in r.json()["aggregates"] if a["fiscal_year"] == 2025)
+    assert row_2025["uscis_new_approvals"] == 50
+    assert row_2025["uscis_transfer_approvals"] is None
+    assert "uscis_initial_approvals" not in row_2025
 
 
 def test_healthz(client):
