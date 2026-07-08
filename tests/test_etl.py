@@ -90,21 +90,45 @@ _DATA_HUB_HEADER = (
 )
 
 
-def _data_hub_row(fy, name, new_app, new_den, concurrent_app, cont_app):
+def _data_hub_row(fy, name, new_app, new_den, concurrent_app, cont_app, change_emp_app=0):
+    # Column order must match _DATA_HUB_HEADER exactly.
     cells = [
         "1", f"{fy}   ", name, "1234", "54 - Prof", "CITY", "CA", "90001",
-        str(new_app), str(new_den), str(cont_app), "0", "0", "0",
-        str(concurrent_app), "0", "0", "0", "0", "0",
+        str(new_app), str(new_den),        # New Employment
+        str(cont_app), "0",                # Continuation
+        "0", "0",                          # Change with Same Employer
+        str(concurrent_app), "0",          # New Concurrent
+        str(change_emp_app), "0",          # Change of Employer
+        "0", "0",                          # Amended
     ]
     return "\t".join(cells)
 
 
+def test_uscis_column_maps_split_new_vs_transfer():
+    from etl.column_maps import USCIS_DATA_HUB, USCIS_STANDARD
+
+    # new_h1b = fresh/cap only; Change of Employer must NOT be in the new tuples
+    assert USCIS_DATA_HUB.new_approval_columns == (
+        "New Employment Approval",
+        "New Concurrent Approval",
+    )
+    assert USCIS_DATA_HUB.transfer_approval_columns == ("Change of Employer Approval",)
+    assert USCIS_DATA_HUB.transfer_denial_columns == ("Change of Employer Denial",)
+    # Legacy pre-summed export has no breakout
+    assert USCIS_STANDARD.new_approval_columns == ("Initial Approval",)
+    assert USCIS_STANDARD.transfer_approval_columns == ()
+
+
 def test_uscis_data_hub_real_schema(tmp_path):
-    # ACME: 10 new-employment + 3 new-concurrent approvals = 13 initial; 2 denials.
-    # Continuation approvals (7) must NOT count toward initial.
+    # New sponsorship = New Employment + New Concurrent + Change of Employer.
+    # ACME: 10 new-emp + 3 new-concurrent + 5 change-of-employer = 18 approvals.
+    # Continuation approvals (7) must NOT count (same-employer renewal).
     lines = [
         _DATA_HUB_HEADER,
-        _data_hub_row(2026, "ACME CORP", new_app=10, new_den=2, concurrent_app=3, cont_app=7),
+        _data_hub_row(
+            2026, "ACME CORP",
+            new_app=10, new_den=2, concurrent_app=3, cont_app=7, change_emp_app=5,
+        ),
     ]
     csv_path = tmp_path / "Employer Information.csv"
     # UTF-16 LE with BOM, as USCIS ships it.
@@ -114,5 +138,6 @@ def test_uscis_data_hub_real_schema(tmp_path):
     ingest_uscis_csv(csv_path, buckets)
 
     bucket = buckets[("ACME", 2026)]
-    assert bucket.initial_approvals == 13  # 10 + 3, not 10 + 3 + 7
+    assert bucket.initial_approvals == 18  # 10 + 3 + 5, not counting continuation (7)
+    assert bucket.initial_denials == 2
     assert bucket.initial_denials == 2

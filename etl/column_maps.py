@@ -18,11 +18,15 @@ class DolColumns:
 class UscisColumns:
     employer: str
     fiscal_year: str
-    # "Initial" approvals/denials are summed across these petition-type columns.
-    # The synthetic fixture ships single pre-summed columns; the real Data Hub
-    # export splits them by petition type (New Employment, New Concurrent, ...).
-    approval_columns: tuple[str, ...]
-    denial_columns: tuple[str, ...]
+    # new_h1b = fresh/cap sponsorship: New Employment + New Concurrent.
+    # Empirically identical to the legacy export's single "Initial" column
+    # (FY2020: 122,894 = 121,874 + 1,020, exact).
+    # transfers = Change of Employer: worker already on H-1B moving in.
+    # Empty transfer tuples = this vintage has no breakout -> transfers NULL.
+    new_approval_columns: tuple[str, ...]
+    new_denial_columns: tuple[str, ...]
+    transfer_approval_columns: tuple[str, ...]
+    transfer_denial_columns: tuple[str, ...]
 
 
 # Modern OFLC disclosure layout (FY2020+)
@@ -43,30 +47,43 @@ DOL_LEGACY = DolColumns(
     wage_unit="LCA_CASE_WAGE_RATE_UNIT",
 )
 
-# Real USCIS H-1B Employer Data Hub annual export (UTF-16 LE, tab-delimited).
-# "Initial" = first-time petitions: New Employment + New Concurrent, matching
-# USCIS's own "Initial Approval/Denial" definition. Continuation, Change, and
-# Amended petitions are excluded (they are not new sponsorships).
+# Real USCIS H-1B Employer Data Hub export with split petition-type columns.
+# Excluded from both categories as same-employer renewals/tweaks:
+# Continuation, Change with Same Employer, Amended. (Per the USCIS Data Hub
+# glossary Part 2 Q2 petition-type definitions.)
 USCIS_DATA_HUB = UscisColumns(
     employer="Employer (Petitioner) Name",
     fiscal_year="Fiscal Year",
-    approval_columns=("New Employment Approval", "New Concurrent Approval"),
-    denial_columns=("New Employment Denial", "New Concurrent Denial"),
+    new_approval_columns=(
+        "New Employment Approval",
+        "New Concurrent Approval",
+    ),
+    new_denial_columns=(
+        "New Employment Denial",
+        "New Concurrent Denial",
+    ),
+    transfer_approval_columns=("Change of Employer Approval",),
+    transfer_denial_columns=("Change of Employer Denial",),
 )
 
-# Synthetic fixture layout: single pre-summed columns.
+# Old Data Hub export / synthetic fixture: single pre-summed Initial column
+# (= New Employment + New Concurrent). No transfer breakout available.
 USCIS_STANDARD = UscisColumns(
     employer="Employer",
     fiscal_year="Fiscal Year",
-    approval_columns=("Initial Approval",),
-    denial_columns=("Initial Denial",),
+    new_approval_columns=("Initial Approval",),
+    new_denial_columns=("Initial Denial",),
+    transfer_approval_columns=(),
+    transfer_denial_columns=(),
 )
 
 USCIS_LOWER = UscisColumns(
     employer="employer",
     fiscal_year="fiscal_year",
-    approval_columns=("initial_approval",),
-    denial_columns=("initial_denial",),
+    new_approval_columns=("initial_approval",),
+    new_denial_columns=("initial_denial",),
+    transfer_approval_columns=(),
+    transfer_denial_columns=(),
 )
 
 
