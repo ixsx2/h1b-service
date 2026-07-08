@@ -13,12 +13,15 @@ from app.main import app
 from etl.build import build_fixture_database
 
 FIXTURES = Path(__file__).parent / "fixtures"
-DATA_DIR = Path(__file__).parent.parent / "data"
 
 
 @pytest.fixture(scope="session", autouse=True)
-def built_db():
-    """Build h1b_data.db from synthetic fixtures once per session."""
+def built_db(tmp_path_factory):
+    """Build h1b_data.db from synthetic fixtures once per session.
+
+    Writes to a pytest temp dir, NOT data/h1b_data.db — the test build must
+    never clobber a real production build sitting at the default path.
+    """
     gen = FIXTURES / "generate_fixtures.py"
     if gen.exists():
         import subprocess
@@ -26,8 +29,9 @@ def built_db():
 
         subprocess.run([sys.executable, str(gen)], check=True)
 
-    db_path = DATA_DIR / "h1b_data.db"
-    users_path = DATA_DIR / "users_test.db"
+    test_data_dir = tmp_path_factory.mktemp("h1b_test_data")
+    db_path = test_data_dir / "h1b_data.db"
+    users_path = test_data_dir / "users_test.db"
     os.environ["H1B_DATA_DB"] = str(db_path)
     os.environ["DATABASE_URL"] = f"sqlite:///{users_path}"
     os.environ["OTP_SECRET"] = "test-otp-secret"
@@ -46,7 +50,8 @@ def built_db():
 @pytest.fixture
 def client(built_db):
     clear_captured_emails()
-    users_path = DATA_DIR / "users_test.db"
+    # Reset the per-session temp users db (path set by built_db via DATABASE_URL).
+    users_path = Path(os.environ["DATABASE_URL"].removeprefix("sqlite:///"))
     if users_path.exists():
         users_path.unlink()
     from app.main import _init_dbs
