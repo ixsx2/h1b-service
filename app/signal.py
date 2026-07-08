@@ -24,11 +24,19 @@ class FiscalYearCount:
 
 
 @dataclass(frozen=True)
+class DenialBlock:
+    approvals: int
+    denials: int
+    denial_rate: float | None
+    caution: bool
+
+
+@dataclass(frozen=True)
 class SignalResult:
     tier: SignalTier
     trend: Trend
-    denial_rate: float | None
-    denial_caution: bool
+    new_h1b: DenialBlock
+    transfers: DenialBlock | None  # None = source vintage lacks the breakout
     certified_by_year: list[FiscalYearCount]
     latest_complete_fy: int
 
@@ -73,6 +81,11 @@ def compute_denial_rate(approvals: int, denials: int) -> tuple[float | None, boo
     return round(rate, 4), caution
 
 
+def _denial_block(approvals: int, denials: int) -> DenialBlock:
+    rate, caution = compute_denial_rate(approvals, denials)
+    return DenialBlock(approvals=approvals, denials=denials, denial_rate=rate, caution=caution)
+
+
 def build_signal(
     rows: list[dict],
     latest_complete_fy: int | None = None,
@@ -84,9 +97,19 @@ def build_signal(
     trend = compute_trend(counts, lcfy)
 
     latest_row = next((r for r in rows if int(r["fiscal_year"]) == lcfy), None)
-    approvals = int(latest_row["uscis_initial_approvals"]) if latest_row else 0
-    denials = int(latest_row["uscis_initial_denials"]) if latest_row else 0
-    denial_rate, denial_caution = compute_denial_rate(approvals, denials)
+    new_h1b = _denial_block(
+        int(latest_row["uscis_new_approvals"]) if latest_row else 0,
+        int(latest_row["uscis_new_denials"]) if latest_row else 0,
+    )
+    if latest_row is not None:
+        tr_app = latest_row["uscis_transfer_approvals"]
+        tr_den = latest_row["uscis_transfer_denials"]
+    else:
+        tr_app, tr_den = 0, 0  # no row = zero activity, breakout still exists
+    if tr_app is None and tr_den is None:
+        transfers = None  # this vintage cannot say — never report 0
+    else:
+        transfers = _denial_block(int(tr_app or 0), int(tr_den or 0))
 
     window = last_n_complete_fiscal_years(5)
     certified_by_year = [
@@ -96,8 +119,8 @@ def build_signal(
     return SignalResult(
         tier=tier,
         trend=trend,
-        denial_rate=denial_rate,
-        denial_caution=denial_caution,
+        new_h1b=new_h1b,
+        transfers=transfers,
         certified_by_year=certified_by_year,
         latest_complete_fy=lcfy,
     )
