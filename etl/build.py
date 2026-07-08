@@ -203,6 +203,51 @@ def ingest_uscis_csv(
                 filed_names[filed.upper()].add(canonical)
 
 
+def ingest_uscis_xlsx(
+    path: Path,
+    buckets: dict[tuple[str, int], YearBucket],
+    filed_names: dict[str, set[str]] | None = None,
+) -> None:
+    """Stream a consolidated USCIS Employer Data Hub xlsx (split petition-type
+    schema). Same contract as ingest_uscis_csv."""
+    wb = load_workbook(path, read_only=True, data_only=True)
+    try:
+        ws = wb.active
+        rows = ws.iter_rows(values_only=True)
+        header_row = next(rows, None)
+        if not header_row:
+            return
+        header = tuple(str(c) if c is not None else "" for c in header_row)
+        cols = resolve_uscis_columns(header)
+        idx_emp, idx_fy, idx_new_app, idx_new_den, idx_tr_app, idx_tr_den = _uscis_indices(
+            header, cols
+        )
+        max_idx = max([idx_emp, idx_fy, *idx_new_app, *idx_new_den, *idx_tr_app, *idx_tr_den])
+
+        for raw in rows:
+            if not raw or len(raw) <= max_idx:
+                continue
+            row = ["" if c is None else str(c) for c in raw]
+            filed = row[idx_emp].strip()
+            if not filed:
+                continue
+            try:
+                # openpyxl may deliver the FY cell as 2025.0
+                fy = int(float(str(row[idx_fy]).strip()))
+            except ValueError:
+                continue
+            canonical = canonicalize(filed)
+            bucket = buckets.setdefault((canonical, fy), YearBucket())
+            try:
+                _accumulate_uscis(bucket, row, idx_new_app, idx_new_den, idx_tr_app, idx_tr_den)
+            except ValueError:
+                continue
+            if filed_names is not None:
+                filed_names[filed.upper()].add(canonical)
+    finally:
+        wb.close()
+
+
 def _salary_stats(salaries: list[float]) -> tuple[float | None, float | None, float | None]:
     if not salaries:
         return None, None, None
@@ -372,19 +417,10 @@ def build_from_paths(
         wb.close()
 
     for uscis_path in uscis_paths:
-        ingest_uscis_csv(uscis_path, buckets)
-        fh, delim = _open_uscis(uscis_path)
-        with fh:
-            reader = csv.reader(fh, delimiter=delim)
-            header = tuple(next(reader, []))
-            cols = resolve_uscis_columns(header)
-            idx_emp = [h.strip() for h in header].index(cols.employer)
-            for row in reader:
-                if len(row) <= idx_emp:
-                    continue
-                filed = row[idx_emp].strip()
-                if filed:
-                    filed_names[filed.upper()].add(canonicalize(filed))
+        if uscis_path.suffix.lower() == ".xlsx":
+            ingest_uscis_xlsx(uscis_path, buckets, filed_names)
+        else:
+            ingest_uscis_csv(uscis_path, buckets, filed_names)
 
     write_database(output, buckets, filed_names)
 

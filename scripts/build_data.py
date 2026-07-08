@@ -35,7 +35,7 @@ def main() -> None:
     else:
         src = ROOT / "data" / "sources"
         dol = sorted(src.glob("LCA_Disclosure_Data_FY*.xlsx"))
-        uscis = sorted(src.glob("*.csv"))
+        uscis = sorted(src.glob("Employer Information*.xlsx")) + sorted(src.glob("*.csv"))
         if not dol:
             raise SystemExit(f"No DOL xlsx files in {src}. Run: python -m etl.download")
         build_from_paths(dol, uscis, args.output)

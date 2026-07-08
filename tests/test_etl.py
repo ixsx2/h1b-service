@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from etl.build import YearBucket, build_fixture_database, ingest_uscis_csv
+from etl.build import YearBucket, build_fixture_database, ingest_uscis_csv, ingest_uscis_xlsx
 from etl.canonicalize import canonicalize
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -148,6 +148,35 @@ def test_uscis_data_hub_real_schema(tmp_path):
     # transfers = Change of Employer only
     assert bucket.transfer_approvals == 5
     assert bucket.transfer_denials == 0
+
+
+def test_uscis_xlsx_ingest_multirow_summation(tmp_path):
+    # Real consolidated files: one employer = many rows (per NAICS/city/ZIP),
+    # numbers may be ints or comma-formatted strings.
+    from openpyxl import Workbook
+
+    wb = Workbook(write_only=True)
+    ws = wb.create_sheet()
+    ws.append([h for h in _DATA_HUB_HEADER.split("\t")])
+    base = ["1", 2025, "ACME CORP", "1234", "54 - Prof", "CITY", "CA", "90001"]
+    #                 NewEmpA NewEmpD ContA ContD SameA SameD ConcA ConcD COEA COED AmA AmD
+    ws.append(base + [10, 1, 7, 0, 0, 0, 2, 0, 4, 1, 0, 0])
+    ws.append(base + ["1,000", 0, 0, 0, 0, 0, 0, 0, 6, 0, 0, 0])
+    # blank employer name: data-entry error, skipped
+    ws.append(["2", 2025, "", "9999", "54", "X", "CA", "0", 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
+    path = tmp_path / "Employer Information_test.xlsx"
+    wb.save(path)
+
+    buckets: dict = defaultdict(YearBucket)
+    filed: dict = defaultdict(set)
+    ingest_uscis_xlsx(path, buckets, filed)
+
+    bucket = buckets[("ACME", 2025)]
+    assert bucket.new_approvals == 1012  # 10 + 2 + 1,000
+    assert bucket.new_denials == 1
+    assert bucket.transfer_approvals == 10  # 4 + 6
+    assert bucket.transfer_denials == 1
+    assert "ACME CORP" in filed
 
 
 def test_uscis_legacy_schema_has_no_transfer_breakout(tmp_path):
