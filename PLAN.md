@@ -133,10 +133,34 @@ CONTEXT.md, PLAN.md, README.md
   Amended excluded. New `USCIS_DATA_HUB` column map + `test_uscis_data_hub_real_schema`
   regression test (32 passed, 2 skipped; ruff clean).
 
+- **Full DOL build validated (2026-07-07).** All 25 quarterly LCA xlsx (FY2020–
+  FY2026, ~2.3 GB) + USCIS FY2026 built to a 117 MB `h1b_data.db`: **165,619
+  employers, 384,309 employer-year aggregates**, FYs 2020–2026 (~85 min build).
+  Signal tiers validated through `build_signal` and the live `/v1/demo` API
+  route: Google, Amazon, Microsoft, Meta, Apple, Infosys all **ACTIVE** with
+  real per-year certified counts (Amazon ~15K/yr) and correct trends (Amazon
+  rising, Google/Microsoft falling). Tier math (LCA-driven, 2021–2025 window)
+  is correct on real data.
+
+- **Known limitation — denial rate needs multi-year USCIS.** `build_signal`
+  reads denial rate from `latest_complete_fy` (2025), but the loaded USCIS
+  export is **FY2026 only** — so denial_rate is null for employers whose USCIS
+  data doesn't fall in the 2025 window. Not a bug: LCA and USCIS release
+  vintages differ. Fix is either (a) load FY2021–FY2025 USCIS CSVs, or (b) point
+  denial rate at the newest FY that has USCIS data. Tiers (the headline signal)
+  are unaffected.
+
+- **Note on entity fragmentation.** Large sponsors that file under many legal
+  names (e.g. Deloitte) canonicalize into separate employers and can read NONE
+  individually. Expected with legal-entity data; a future entity-resolution
+  pass could merge known corporate families.
+
 ### Not done yet
 
-- Real **DOL** LCA ETL validation (the xlsx half — certified LCA counts, salary,
-  titles). `tests/fixtures/real/` still has no DOL file → `test_real_etl` skipped.
+- `test_real_etl` still skipped — it reads `tests/fixtures/real/`, but the real
+  files live in `data/sources/` (2.3 GB, not copied into the test fixtures dir).
+  The real build was validated directly instead (see above). Wiring the test to
+  an env-pointed real dir would let CI exercise it without duplicating files.
   **Blocked (2026-07-07):** `www.dol.gov` returns HTTP 403 to every non-interactive
   client — Akamai edge bot protection. Verified: templated `/data/` URLs, the
   `/pdfs/` path the performance page links to, and the performance page itself all
