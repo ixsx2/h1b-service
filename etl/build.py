@@ -26,8 +26,11 @@ class YearBucket:
     certified: int = 0
     salaries: list[float] = field(default_factory=list)
     titles: Counter[str] = field(default_factory=Counter)
-    initial_approvals: int = 0
-    initial_denials: int = 0
+    new_approvals: int = 0
+    new_denials: int = 0
+    # None = source vintage has no Change of Employer breakout (NULL in DB)
+    transfer_approvals: int | None = None
+    transfer_denials: int | None = None
 
 
 def annualize_wage(amount: float, unit: str) -> float | None:
@@ -133,11 +136,14 @@ def _uscis_indices(header: tuple[str, ...], cols):
     def idx(name: str) -> int:
         return stripped.index(name)
 
-    idx_emp = idx(cols.employer)
-    idx_fy = idx(cols.fiscal_year)
-    idx_app = [idx(c) for c in cols.approval_columns]
-    idx_den = [idx(c) for c in cols.denial_columns]
-    return idx_emp, idx_fy, idx_app, idx_den
+    return (
+        idx(cols.employer),
+        idx(cols.fiscal_year),
+        [idx(c) for c in cols.new_approval_columns],
+        [idx(c) for c in cols.new_denial_columns],
+        [idx(c) for c in cols.transfer_approval_columns],
+        [idx(c) for c in cols.transfer_denial_columns],
+    )
 
 
 def _sum_cells(row: list[str], indices: list[int]) -> int:
@@ -147,14 +153,35 @@ def _sum_cells(row: list[str], indices: list[int]) -> int:
     return total
 
 
-def ingest_uscis_csv(path: Path, buckets: dict[tuple[str, int], YearBucket]) -> None:
+def _accumulate_uscis(
+    bucket: YearBucket,
+    row: list,
+    idx_new_app: list[int],
+    idx_new_den: list[int],
+    idx_tr_app: list[int],
+    idx_tr_den: list[int],
+) -> None:
+    bucket.new_approvals += _sum_cells(row, idx_new_app)
+    bucket.new_denials += _sum_cells(row, idx_new_den)
+    if idx_tr_app:  # breakout available in this vintage
+        bucket.transfer_approvals = (bucket.transfer_approvals or 0) + _sum_cells(row, idx_tr_app)
+        bucket.transfer_denials = (bucket.transfer_denials or 0) + _sum_cells(row, idx_tr_den)
+
+
+def ingest_uscis_csv(
+    path: Path,
+    buckets: dict[tuple[str, int], YearBucket],
+    filed_names: dict[str, set[str]] | None = None,
+) -> None:
     fh, delim = _open_uscis(path)
     with fh:
         reader = csv.reader(fh, delimiter=delim)
         header = tuple(next(reader, []))
         cols = resolve_uscis_columns(header)
-        idx_emp, idx_fy, idx_app, idx_den = _uscis_indices(header, cols)
-        max_idx = max([idx_emp, idx_fy, *idx_app, *idx_den])
+        idx_emp, idx_fy, idx_new_app, idx_new_den, idx_tr_app, idx_tr_den = _uscis_indices(
+            header, cols
+        )
+        max_idx = max([idx_emp, idx_fy, *idx_new_app, *idx_new_den, *idx_tr_app, *idx_tr_den])
 
         for row in reader:
             if len(row) <= max_idx:
@@ -167,13 +194,13 @@ def ingest_uscis_csv(path: Path, buckets: dict[tuple[str, int], YearBucket]) -> 
             except ValueError:
                 continue
             canonical = canonicalize(filed)
-            key = (canonical, fy)
-            bucket = buckets.setdefault(key, YearBucket())
+            bucket = buckets.setdefault((canonical, fy), YearBucket())
             try:
-                bucket.initial_approvals += _sum_cells(row, idx_app)
-                bucket.initial_denials += _sum_cells(row, idx_den)
+                _accumulate_uscis(bucket, row, idx_new_app, idx_new_den, idx_tr_app, idx_tr_den)
             except ValueError:
                 continue
+            if filed_names is not None:
+                filed_names[filed.upper()].add(canonical)
 
 
 def _salary_stats(salaries: list[float]) -> tuple[float | None, float | None, float | None]:
@@ -215,8 +242,10 @@ def write_database(
             salary_min REAL,
             salary_max REAL,
             top_titles TEXT NOT NULL DEFAULT '[]',
-            uscis_initial_approvals INTEGER NOT NULL DEFAULT 0,
-            uscis_initial_denials INTEGER NOT NULL DEFAULT 0,
+            uscis_new_approvals INTEGER NOT NULL DEFAULT 0,
+            uscis_new_denials INTEGER NOT NULL DEFAULT 0,
+            uscis_transfer_approvals INTEGER,
+            uscis_transfer_denials INTEGER,
             PRIMARY KEY (canonical_employer, fiscal_year)
         );
         CREATE VIRTUAL TABLE employer_search USING fts5(
@@ -250,8 +279,9 @@ def write_database(
             INSERT INTO aggregates (
                 canonical_employer, fiscal_year, certified_count,
                 salary_median, salary_min, salary_max, top_titles,
-                uscis_initial_approvals, uscis_initial_denials
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                uscis_new_approvals, uscis_new_denials,
+                uscis_transfer_approvals, uscis_transfer_denials
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 canon,
@@ -261,8 +291,10 @@ def write_database(
                 smin,
                 smax,
                 json.dumps(_top_titles(bucket.titles)),
-                bucket.initial_approvals,
-                bucket.initial_denials,
+                bucket.new_approvals,
+                bucket.new_denials,
+                bucket.transfer_approvals,
+                bucket.transfer_denials,
             ),
         )
 

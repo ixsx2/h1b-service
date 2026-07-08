@@ -63,16 +63,21 @@ def test_filed_name_mapping(built):
     conn.close()
 
 
-def test_uscis_denial_joined(built):
+def test_uscis_split_columns_joined(built):
     conn = sqlite3.connect(built)
     row = conn.execute(
         """
-        SELECT uscis_initial_approvals, uscis_initial_denials
+        SELECT uscis_new_approvals, uscis_new_denials,
+               uscis_transfer_approvals, uscis_transfer_denials
         FROM aggregates WHERE canonical_employer='DATADOG' AND fiscal_year=2025
         """
     ).fetchone()
+    # Fixture CSV is legacy pre-summed: new gets the Initial numbers,
+    # transfers stay NULL (breakout unavailable), never 0.
     assert row[0] == 50
     assert row[1] == 5
+    assert row[2] is None
+    assert row[3] is None
     conn.close()
 
 
@@ -120,9 +125,8 @@ def test_uscis_column_maps_split_new_vs_transfer():
 
 
 def test_uscis_data_hub_real_schema(tmp_path):
-    # New sponsorship = New Employment + New Concurrent + Change of Employer.
-    # ACME: 10 new-emp + 3 new-concurrent + 5 change-of-employer = 18 approvals.
-    # Continuation approvals (7) must NOT count (same-employer renewal).
+    # new_h1b = New Employment + New Concurrent (fresh/cap); Change of Employer
+    # is a transfer, tracked separately. Continuation (7) counts in neither.
     lines = [
         _DATA_HUB_HEADER,
         _data_hub_row(
@@ -138,6 +142,28 @@ def test_uscis_data_hub_real_schema(tmp_path):
     ingest_uscis_csv(csv_path, buckets)
 
     bucket = buckets[("ACME", 2026)]
-    assert bucket.initial_approvals == 18  # 10 + 3 + 5, not counting continuation (7)
-    assert bucket.initial_denials == 2
-    assert bucket.initial_denials == 2
+    # new_h1b = 10 New Employment + 3 New Concurrent; NOT continuation (7), NOT COE
+    assert bucket.new_approvals == 13
+    assert bucket.new_denials == 2
+    # transfers = Change of Employer only
+    assert bucket.transfer_approvals == 5
+    assert bucket.transfer_denials == 0
+
+
+def test_uscis_legacy_schema_has_no_transfer_breakout(tmp_path):
+    lines = [
+        "Employer,Fiscal Year,Initial Approval,Initial Denial",
+        "ACME CORP,2025,40,4",
+    ]
+    csv_path = tmp_path / "uscis_legacy.csv"
+    csv_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+    buckets: dict = defaultdict(YearBucket)
+    ingest_uscis_csv(csv_path, buckets)
+
+    bucket = buckets[("ACME", 2025)]
+    assert bucket.new_approvals == 40
+    assert bucket.new_denials == 4
+    # NULL, not 0: this vintage cannot say
+    assert bucket.transfer_approvals is None
+    assert bucket.transfer_denials is None
