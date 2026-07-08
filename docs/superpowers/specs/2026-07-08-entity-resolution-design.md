@@ -53,17 +53,33 @@ False-merge (joining two genuinely distinct employers) is worse than an orphan.
 Rules chosen from the 433K-name token census and validated against the fuzzy
 bake-off (each was a high-confidence, correct match class):
 
-- **Punctuation → space**, not delete: `.` `,` `/` `(` `)` `-` and apostrophe
-  (`'`). Current code deletes `.`, which is the exact bug splitting
-  `AMAZON.COM` (→`AMAZONCOM`) from `AMAZON COM`. Bake-off: apostrophe cases
-  score 0.98–0.99 (ST JUDE CHILDRENS = CHILDREN'S). Strip mojibake
-  (`�`, `\xa0`).
-- **`&` / `AND` unify** to one token, drop a dangling trailing `AND`
-  (JPMORGAN CHASE AND = JPMORGAN CHASE &).
+- **Punctuation → space**, not delete: `.` `,` `/` `(` `)` `-`. Current code
+  deletes `.`, which is the exact bug splitting `AMAZON.COM` (→`AMAZONCOM`)
+  from `AMAZON COM`. Replace mojibake (`�`, `\xa0`) with space.
+- **Apostrophe → delete** (not space): `CHILDREN'S` must become `CHILDRENS`
+  to converge with the apostrophe-free spelling (bake-off: 0.98–0.99 matches).
+  Spacing it would produce `CHILDREN S` and split instead of merge.
+- **Single-letter-run collapse** (after punctuation → space): runs of 2+
+  adjacent single-letter tokens merge into one token — `U S A`→`USA`,
+  `N A`→`NA`, `A T KEARNEY`→`AT KEARNEY`, `L P`→`LP`. Required because
+  dot→space alone would *break* pairs the old dot-delete happened to merge
+  (verified: `VISA U.S.A.` and `VISA USA` both canonicalize to `VISA USA`
+  today; dot→space without collapse splits them into `VISA U S A` vs
+  `VISA USA`). The collapse never crosses a multi-letter token, so
+  `AMAZON COM` is untouched.
+- **`&` → ` AND `** (that direction, with surrounding spaces), then collapse
+  whitespace; drop a dangling trailing `AND`. Gives `TEXAS A&M` →
+  `TEXAS A AND M` (= USCIS's spelling) and `JPMORGAN CHASE & CO` →
+  `JPMORGAN CHASE` (CO suffix-stripped, trailing AND dropped) =
+  USCIS's `JPMORGAN CHASE AND`.
 - **`D B A` / `DBA` clause truncate** to the legal filer before it (13,989
   occurrences; FIDELITY GROUP D B A FIDELITY INVESTMENTS → FIDELITY GROUP).
-- **Extend suffix strip**: add `PC PLLC LLP LP PA` to the existing
-  `INC LLC CORP …` set. Entity-form markers only.
+  Guard: if the clause starts the name (nothing before it), keep the name
+  unchanged rather than canonicalizing to empty.
+- **Extend suffix strip**: add `PC PLLC LLP LP PA` — **trailing position
+  only**, unlike the existing anywhere-in-name `INC LLC CORP …` set. Two-letter
+  tokens are too likely to be meaningful mid-name (`PC CONNECTION`,
+  `LP BUILDING SOLUTIONS`) to strip positionally blind.
 - **Strip leading `THE`** (6,223 names; THE BOEING COMPANY → BOEING COMPANY).
 
 **Explicitly NOT stripped** — false-merge traps, deferred to Layer 2: trailing
@@ -104,6 +120,10 @@ documented orphans. An LLM suggester for these is out of scope for the pilot.
   distinct keys, ranked by approvals. Most collisions are correct merges; the
   report exists so any false merge the rule changes introduce is visible and
   eyeballed before the build is trusted. A report, not a gate.
+- **Dead-alias warning** — at build time, any `aliases.csv` row whose
+  `source_canonical` never occurs in the ingested corpus is reported. Alias
+  keys are post-Layer-1 canonicals, so a future normalization-rule change can
+  silently orphan an alias entry; this makes that visible instead of silent.
 
 ## Ship criterion (the gate)
 
