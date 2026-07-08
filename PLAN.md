@@ -30,9 +30,12 @@ data-engineering portfolio artifact.
    - RARE: >0 certified in last 5 FYs, below the above
    - NONE: zero in 5 FYs
    - Orthogonal fields, never folded into tier: trend (rising|falling|flat,
-     null when both years <10) and denial_rate (USCIS initial denials /
-     initial decisions, latest FY, null when petitions <10; caution flag when
-     >=15% with real volume).
+     null when both years <10) and two USCIS denial blocks — new_h1b
+     (New Employment + New Concurrent) and transfers (Change of Employer),
+     each {approvals, denials, denial_rate (null when decisions <10),
+     caution (>=15%)}; transfers is null when the source vintage lacks the
+     breakout. Amended 2026-07-07 with sign-off (supersedes the single
+     pooled denial_rate). See docs/superpowers/specs/2026-07-07-new-h1b-vs-transfers-design.md.
 5. **Lookup semantics**: canonicalize query -> exact match; miss -> FTS5 fuzzy
    over canonical + filed names; single confident hit -> answer with
    `matched_as`; multiple -> `candidates` list and NO signal (never auto-pick);
@@ -57,7 +60,7 @@ data-engineering portfolio artifact.
     | GET /healthz | open | uptime |
     | GET /v1/demo | open, 30/day/IP | canned live example (fixed employer) |
     | POST /auth/code, /auth/verify | open, rate-limited | OTP -> API key |
-    | GET /v1/signal?company=X | key | Signal Tier + counts by FY + trend + denial_rate + match semantics |
+    | GET /v1/signal?company=X | key | Signal Tier + counts by FY + trend + new_h1b/transfers denial blocks + match semantics |
     | GET /v1/employer/{name} | key | full aggregates: per-FY certified, salary median/range, top titles, USCIS approvals/denials |
     Cut from pilot: standalone /v1/search, raw filings, salary-by-title,
     batch, webhooks. /v1 additive-only once users exist. Errors always
@@ -142,18 +145,40 @@ CONTEXT.md, PLAN.md, README.md
   rising, Google/Microsoft falling). Tier math (LCA-driven, 2021–2025 window)
   is correct on real data.
 
-- **Known limitation — denial rate needs multi-year USCIS.** `build_signal`
-  reads denial rate from `latest_complete_fy` (2025), but the loaded USCIS
-  export is **FY2026 only** — so denial_rate is null for employers whose USCIS
-  data doesn't fall in the 2025 window. Not a bug: LCA and USCIS release
-  vintages differ. Fix is either (a) load FY2021–FY2025 USCIS CSVs, or (b) point
-  denial rate at the newest FY that has USCIS data. Tiers (the headline signal)
-  are unaffected.
+- **RESOLVED — denial rate multi-year gap.** Consolidated USCIS Employer Data
+  Hub xlsx for **FY2020–FY2026** are now loaded (five `Employer Information*.xlsx`,
+  ~333K employer-year buckets), so both denial blocks populate from
+  `latest_complete_fy` (2025). The old FY2026-only limitation is gone.
 
-- **Note on entity fragmentation.** Large sponsors that file under many legal
-  names (e.g. Deloitte) canonicalize into separate employers and can read NONE
-  individually. Expected with legal-entity data; a future entity-resolution
-  pass could merge known corporate families.
+- **new_h1b vs transfers split shipped (2026-07-07→08).** USCIS signal split
+  into two independent denial blocks — `new_h1b` (New Employment + New
+  Concurrent, = the legacy `Initial` column exactly) and `transfers` (Change of
+  Employer). Four-column schema (`uscis_new_*` NOT NULL, `uscis_transfer_*`
+  nullable, NULL = vintage lacks breakout); xlsx ingest; nested payload (clean
+  break, flat `denial_rate` removed with sign-off). Pre-build subset validation
+  gate (`scripts/validate_uscis_subset.py`) passed: ingest matched an
+  independent recomputation on ~90 sampled employer-years across all FYs, the
+  FY2020 cross-vintage identity held (122,893 ingested + 1 blank-name-row
+  approval = 122,894 legacy total), and DOL↔USCIS joined for all five anchors.
+  Full suite 40 passed / 2 skipped, ruff clean.
+
+- **Full split build validated (2026-07-08).** All 25 DOL quarters + five USCIS
+  xlsx built to a **148 MB `h1b_data.db`: 210,585 employers, 479,586
+  employer-year aggregates**, FYs 2020–2026 (~65 min). Live `/v1/demo` for
+  Google: tier ACTIVE, trend falling, new_h1b {1050 appr / 6 den / 0.6%},
+  transfers {715 appr / 6 den / 0.8%}, no top-level `denial_rate`. Zero NULL
+  transfer columns where USCIS data exists (all real files carry the breakout).
+
+- **Known limitation — name-join orphan rate ~25%.** Measured on the split
+  build: **24.9% of FY2025 (24.7% of FY2024) USCIS employer-years with fresh
+  approvals have no matching LCA row**, because DOL and USCIS spell the same
+  employer differently. Concrete case: DOL writes "AMAZON.COM SERVICES"
+  (canon `AMAZONCOM SERVICES`, LCA 15,494) while USCIS FY2025 writes "AMAZON COM
+  SERVICES" (canon `AMAZON COM SERVICES`) — different keys, so Amazon's primary
+  entity reads certified_count=0 against its USCIS denial data. Out of scope for
+  this pilot; a future entity-resolution pass (suffix/punctuation-aware fuzzy
+  merge, or a curated corporate-family map) would recover these joins. Related:
+  large sponsors filing under many legal names (Deloitte) fragment the same way.
 
 ### Not done yet
 

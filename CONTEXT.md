@@ -38,8 +38,8 @@ _Avoid_: application (collides with LCA)
 
 **Sponsorship Signal**:
 The service's headline output for a Canonical Employer: a Signal Tier plus
-supporting numbers (recent certified counts, trend, denial rate). A grade, not
-a score.
+supporting numbers (recent certified counts, trend, and the new_h1b/transfers
+denial blocks). A grade, not a score.
 _Avoid_: sponsor score (implies false numeric precision)
 
 **Signal Tier**:
@@ -52,7 +52,21 @@ certified LCAs in five years.
 Direction of certified-LCA volume, latest fiscal year vs the prior one:
 rising, falling, or flat. Null when volumes are too small to mean anything.
 
+**New Sponsorship (new_h1b)**:
+USCIS petitions where the employer takes on a worker it did not previously
+sponsor at all: New Employment + New Concurrent. Equals the legacy export's
+single "Initial" column exactly. One of the two denial blocks on a Sponsorship
+Signal.
+
+**Transfer (transfers)**:
+USCIS Change of Employer petitions: the worker already holds H-1B status and
+moves to this employer. Signals willingness to hire existing H-1B holders even
+when an employer files few or no fresh/cap petitions. Null (not 0) when the
+source vintage has no breakout — never conflate "can't say" with "zero".
+_Avoid_: reporting transfers folded into new_h1b (the distinction is the point).
+
 **Denial Rate**:
-USCIS initial denials over initial decisions for the latest fiscal year. Null
-below a minimum petition count — small denominators must not print as
-percentages.
+Denials over decisions for a given denial block (new_h1b or transfers),
+latest fiscal year. Computed independently per block. Null below a minimum
+petition count — small denominators must not print as percentages. Caution
+flag at >=15% with real volume.

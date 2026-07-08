@@ -3,9 +3,11 @@
 Public-ready pilot API: "would this company sponsor an H-1B?" built from DOL
 LCA disclosure files + USCIS Employer Data Hub.
 
-**Status (2026-07-07):** Phases 1–2b **done**. Phase 3 **in progress** — repo
-https://github.com/ixsx2/h1b-service, CI green (31 passed). Live deploy blocked
-on Heroku app + Resend + `.dev` domain. Next: [PLAN.md § Next steps](PLAN.md#next-steps-priority-order).
+**Status (2026-07-08):** Phases 1–2b **done**. Phase 3 **in progress** — repo
+https://github.com/ixsx2/h1b-service, tests green (40 passed, 2 skipped). USCIS
+signal split into new_h1b vs transfers; full FY2020–2026 build validated (148 MB,
+210K employers). Live deploy blocked on Heroku app + Resend + `.dev` domain.
+Next: [PLAN.md § Next steps](PLAN.md#next-steps-priority-order).
 
 ## Read before working (in this order)
 
