@@ -385,14 +385,24 @@ def write_database(
             (row[1], row[0]),
         )
 
+    latest_fy = last_n_complete_fiscal_years(1)[0]
+    new_total = sum(b.new_approvals for (_, fy), b in buckets.items() if fy == latest_fy)
+    new_orphan = sum(
+        b.new_approvals
+        for (_, fy), b in buckets.items()
+        if fy == latest_fy and b.certified == 0
+    )
+    orphan_rate = str(round(new_orphan / new_total, 4)) if new_total else "null"
+
     conn.execute(
         """
         INSERT INTO meta (key, value) VALUES ('latest_complete_fy', ?),
-               ('built_fiscal_years', ?)
+               ('built_fiscal_years', ?), ('orphan_new_approval_rate', ?)
         """,
         (
-            str(last_n_complete_fiscal_years(1)[0]),
+            str(latest_fy),
             json.dumps(sorted({fy for _, fy in buckets})),
+            orphan_rate,
         ),
     )
     conn.commit()
