@@ -1,0 +1,6 @@
+# Curated entity aliases — Layer 2 of entity resolution.
+# Both columns are POST-canonicalize() keys. Single-hop only: a target must
+# never appear as a source. Every row is human-reviewed; provenance is the
+# generate_alias_worksheet.py review round that produced it.
+# See docs/superpowers/specs/2026-07-08-entity-resolution-design.md.
+source_canonical,target_canonical

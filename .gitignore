@@ -17,3 +17,4 @@ htmlcov/
 *.xlsx
 *.csv
 !tests/fixtures/**
+!etl/aliases.csv

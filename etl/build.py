@@ -13,6 +13,7 @@ from pathlib import Path
 
 from openpyxl import load_workbook
 
+from etl.aliases import load_aliases
 from etl.canonicalize import canonicalize
 from etl.column_maps import resolve_dol_columns, resolve_uscis_columns
 from etl.sources import fiscal_year_from_dol_filename, last_n_complete_fiscal_years
@@ -203,6 +204,35 @@ def ingest_uscis_csv(
                 filed_names[filed.upper()].add(canonical)
 
 
+def apply_aliases(
+    buckets: dict[tuple[str, int], YearBucket],
+    filed_names: dict[str, set[str]],
+    aliases: dict[str, str],
+) -> list[str]:
+    """Remap bucket keys through the curated alias map; merge collided buckets.
+
+    Returns alias sources that never occurred in the corpus (dead aliases)."""
+    seen: set[str] = set()
+    for canon, fy in list(buckets):
+        target = aliases.get(canon)
+        if target is None:
+            continue
+        seen.add(canon)
+        src = buckets.pop((canon, fy))
+        dst = buckets.setdefault((target, fy), YearBucket())
+        dst.certified += src.certified
+        dst.salaries.extend(src.salaries)
+        dst.titles.update(src.titles)
+        dst.new_approvals += src.new_approvals
+        dst.new_denials += src.new_denials
+        if src.transfer_approvals is not None:
+            dst.transfer_approvals = (dst.transfer_approvals or 0) + src.transfer_approvals
+            dst.transfer_denials = (dst.transfer_denials or 0) + (src.transfer_denials or 0)
+    for filed, canon_set in filed_names.items():
+        filed_names[filed] = {aliases.get(c, c) for c in canon_set}
+    return sorted(s for s in aliases if s not in seen)
+
+
 def ingest_uscis_xlsx(
     path: Path,
     buckets: dict[tuple[str, int], YearBucket],
@@ -373,6 +403,7 @@ def build_from_paths(
     dol_paths: list[Path],
     uscis_paths: list[Path],
     output: Path,
+    aliases_path: Path | None = None,
 ) -> None:
     buckets: dict[tuple[str, int], YearBucket] = defaultdict(YearBucket)
     filed_names: dict[str, set[str]] = defaultdict(set)
@@ -421,6 +452,11 @@ def build_from_paths(
             ingest_uscis_xlsx(uscis_path, buckets, filed_names)
         else:
             ingest_uscis_csv(uscis_path, buckets, filed_names)
+
+    aliases = load_aliases(aliases_path)
+    dead = apply_aliases(buckets, filed_names, aliases)
+    if dead:
+        print(f"WARNING: {len(dead)} dead alias(es) — source never occurred: {dead}")
 
     write_database(output, buckets, filed_names)
 

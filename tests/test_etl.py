@@ -196,3 +196,56 @@ def test_uscis_legacy_schema_has_no_transfer_breakout(tmp_path):
     # NULL, not 0: this vintage cannot say
     assert bucket.transfer_approvals is None
     assert bucket.transfer_denials is None
+
+
+def test_alias_loader_rejects_chains(tmp_path):
+    from etl.aliases import load_aliases
+
+    p = tmp_path / "aliases.csv"
+    p.write_text(
+        "source_canonical,target_canonical\nA CO,B CO\nB CO,C CO\n", encoding="utf-8"
+    )
+    with pytest.raises(ValueError):
+        load_aliases(p)
+
+
+def test_apply_aliases_merges_buckets_and_reports_dead(tmp_path):
+    from etl.aliases import load_aliases
+    from etl.build import apply_aliases
+
+    p = tmp_path / "aliases.csv"
+    p.write_text(
+        "# comment\nsource_canonical,target_canonical\n"
+        "ACME EAST,ACME\nNEVER OCCURS,ACME\n",
+        encoding="utf-8",
+    )
+    aliases = load_aliases(p)
+
+    src = YearBucket(certified=5, new_approvals=10, new_denials=1)
+    src.transfer_approvals, src.transfer_denials = 4, 0
+    dst = YearBucket(certified=20, new_approvals=7)
+    buckets = {("ACME EAST", 2025): src, ("ACME", 2025): dst}
+    filed = {"ACME EAST LLC": {"ACME EAST"}}
+
+    dead = apply_aliases(buckets, filed, aliases)
+
+    assert ("ACME EAST", 2025) not in buckets
+    merged = buckets[("ACME", 2025)]
+    assert merged.certified == 25
+    assert merged.new_approvals == 17
+    assert merged.new_denials == 1
+    # dst had no breakout (None); src did -> merged carries src's numbers
+    assert merged.transfer_approvals == 4
+    assert filed["ACME EAST LLC"] == {"ACME"}
+    assert dead == ["NEVER OCCURS"]
+
+
+def test_orphan_rate_in_meta(built):
+    conn = sqlite3.connect(built)
+    row = conn.execute(
+        "SELECT value FROM meta WHERE key='orphan_new_approval_rate'"
+    ).fetchone()
+    assert row is not None
+    # Fixture: all USCIS rows join to LCA rows -> orphan rate 0.0
+    assert row[0] == "0.0"
+    conn.close()
