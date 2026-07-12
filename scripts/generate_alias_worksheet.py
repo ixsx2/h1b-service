@@ -2,10 +2,13 @@
 """Layer-2 alias worksheet: suggest LCA-side matches for USCIS orphans.
 
 Suggests, never merges. A human fills the `accept` column; `--apply` copies
-accepted rows into etl/aliases.csv. Fuzzy scoring is stdlib difflib within
-first-token blocks (bake-off-validated: high recall, but ~15-20% of
-high-scoring suggestions are wrong-same — Amazon->AWS at 0.84 — hence the
-mandatory human review)."""
+accepted rows into etl/aliases.csv. Fuzzy scoring is stdlib difflib against the
+full LCA name set (no first-token blocking): blocking misses divergent legal
+names the orphan shares no leading word with. Bake-off-validated: high recall,
+but ~15-20% of high-scoring suggestions are wrong-same — Amazon->AWS at 0.84,
+and geographic qualifiers like UPenn->Indiana Univ of Pennsylvania — hence the
+mandatory human review, and the golden regression suite that freezes known
+distinct-entity pairs."""
 
 from __future__ import annotations
 
@@ -13,7 +16,6 @@ import argparse
 import csv
 import sqlite3
 import sys
-from collections import defaultdict
 from difflib import SequenceMatcher
 from pathlib import Path
 
@@ -39,12 +41,10 @@ def generate(limit: int) -> None:
         " ORDER BY uscis_new_approvals DESC LIMIT ?",
         (latest, limit),
     ).fetchall()
-    lca_block: dict[str, list[str]] = defaultdict(list)
-    for (name,) in conn.execute(
+    lca_all = [name for (name,) in conn.execute(
         "SELECT canonical_employer FROM aggregates WHERE fiscal_year=? AND certified_count>0",
         (latest,),
-    ):
-        lca_block[name.split(" ", 1)[0]].append(name)
+    )]
     conn.close()
 
     existing = load_aliases()
@@ -55,10 +55,10 @@ def generate(limit: int) -> None:
             if canon in existing:
                 continue
             best, best_r = "", 0.0
-            for cand in lca_block.get(canon.split(" ", 1)[0], []):
-                r = SequenceMatcher(None, canon, cand).ratio()
+            for lca in lca_all:
+                r = SequenceMatcher(None, canon, lca).ratio()
                 if r > best_r:
-                    best, best_r = cand, r
+                    best, best_r = lca, r
             if best_r < MIN_RATIO:
                 best, best_r = "", 0.0
             w.writerow([canon, best, f"{best_r:.2f}" if best else "", appr, ""])
