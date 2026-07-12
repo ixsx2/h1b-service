@@ -70,3 +70,24 @@ Denials over decisions for a given denial block (new_h1b or transfers),
 latest fiscal year. Computed independently per block. Null below a minimum
 petition count — small denominators must not print as percentages. Caution
 flag at >=15% with real volume.
+
+**Orphan**:
+A Canonical Employer present in only one source: USCIS approvals with no
+matching DOL LCA row, or the reverse. Caused by the two sources spelling the
+same employer differently (the join runs on name only — the FEIN join is dead).
+An orphan is never graded: it returns a Partial Signal, not a Signal Tier.
+_Avoid_: "missing" (an orphan has data, just from one side).
+
+**Partial Signal**:
+The response state for an Orphan: the numbers from the matched source, an
+explicit `missing_source`, and a suppressed (null) Signal Tier. Distinct from
+both a full match and `unmatched` (the query hit nothing at all). Extends the
+rule "matched: false is not tier NONE" to half-matches — absence of a source is
+never laundered into a grade.
+
+**Vintage**:
+The fiscal year a source's data is current through. DOL and USCIS refresh on
+different cadences (DOL quarterly, USCIS ~yearly and lagged), so the latest DOL
+Vintage can lead the latest USCIS Vintage. Each field in a Sponsorship Signal
+carries its own Vintage; tier and denial data must not be assumed to share one.
+_Avoid_: "latest year" (ambiguous across the two sources).

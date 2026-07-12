@@ -2,6 +2,12 @@
 
 Date: 2026-07-08. Status: approved in conversation (Ishan), pending spec review.
 
+**Amended 2026-07-12** (grill-with-docs session): ceiling set to marquee-correct
+(ADR-0002), orphan employers return a `partial` state (ADR-0003), DOL/USCIS
+vintage skew tracked per-field (ADR-0004), plus four refinements to the ship
+gate, alias durability, merge-safety, and the published orphan metric — folded
+into the sections below.
+
 ## Problem
 
 DOL LCA and USCIS Employer Data Hub are joined on `canonicalize()` of the
@@ -93,10 +99,13 @@ so matched pairs converge with zero curation.
 
 ### Layer 2 — curated alias map (`etl/aliases.csv`)
 
-- **`etl/aliases.csv`**: two columns `source_canonical,target_canonical`, a
-  header comment stating provenance, committed and human-reviewed. Both columns
-  hold **post-Layer-1 canonical keys** (i.e. the output of `canonicalize()`,
-  not raw filed names). Applied in `build_from_paths` after `canonicalize()`
+- **`etl/aliases.csv`**: columns `source_canonical,target_canonical,note`
+  (the `note` provenance column added 2026-07-12 — a per-row breadcrumb such as
+  `worksheet-2026-07-11` or `manual:UMASS=UMass Chan`, so a future reviewer can
+  audit *why* a merge exists without re-deriving it), a header comment stating
+  file-level provenance, committed and human-reviewed. The two key columns hold
+  **post-Layer-1 canonical keys** (i.e. the output of `canonicalize()`, not raw
+  filed names). Applied in `build_from_paths` after `canonicalize()`
   and before bucketing: any filed name whose post-canonical key equals
   `source_canonical` is remapped to `target_canonical`. Only entries in this file ever merge; nothing automatic.
 - **`scripts/generate_alias_worksheet.py`**: ranks orphans by approval volume,
@@ -118,22 +127,51 @@ documented orphans. An LLM suggester for these is out of scope for the pilot.
 - **`normalization_collisions.csv`** — emitted at build time. Lists every new
   canonical key that receives filed names the *old* normalizer kept as 2+
   distinct keys, ranked by approvals. Most collisions are correct merges; the
-  report exists so any false merge the rule changes introduce is visible and
-  eyeballed before the build is trusted. A report, not a gate.
-- **Dead-alias warning** — at build time, any `aliases.csv` row whose
-  `source_canonical` never occurs in the ingested corpus is reported. Alias
-  keys are post-Layer-1 canonicals, so a future normalization-rule change can
-  silently orphan an alias entry; this makes that visible instead of silent.
+  report exists so any false merge the rule changes introduce is visible. It
+  stays a report (for discovering *new* collisions), not a gate — the durable
+  fence for *known* traps is the golden suite below.
+- **Golden canonicalize regression suite (2026-07-12)** — a curated, two-sided
+  pair list run in CI on every Layer-1 change: **must-stay-distinct**
+  (`BANK OF AMERICA ≠ BANK OF`, `AMAZON ≠ AMAZON WEB SERVICES`,
+  `PENN STATE ≠ UNIVERSITY OF PENNSYLVANIA`, …) and **must-merge**
+  (`AMAZON.COM = AMAZON COM`, …). Each entry is a trap the bake-off already paid
+  to discover; the suite freezes them so a future rule tweak cannot silently
+  un-fix one. Replaces the unrepeatable "eyeball the 2 MB collisions report"
+  step. Grow it whenever a new trap is found.
+- **Dead-alias gate (2026-07-12)** — at build time, any `aliases.csv` row whose
+  `source_canonical` never occurs in the ingested corpus is a **dead alias**.
+  Because alias keys are post-Layer-1 canonicals, a future normalization-rule
+  change can silently orphan an entry, regressing a merge with no error. A dead
+  alias is always a bug: either the rule changed (re-curate) or the entity
+  vanished (delete the row). Promoted from warning to a CI gate
+  (`test_no_dead_aliases`, active when real data is present).
 
 ## Ship criterion (the gate)
 
-- **`test_known_sponsors_join`** — a fixed allowlist of ~40 marquee employers
+- **`test_known_sponsors_join`** — a fixed allowlist of marquee employers
   (Amazon, Google, the big consultancies, top banks, top universities). Each
-  must have `certified_count > 0` AND `uscis_new_approvals > 0` at the latest
-  complete FY. Any red = ship blocker. This guarantees the high-stakes names a
-  user is likeliest to query are correct, without chasing a global percentage.
-- The approval-weighted orphan rate is logged to the aggregates `meta` table
-  each build as observability, NOT a gate.
+  must have `certified_count > 0` AND `uscis_new_approvals > 0` at
+  `latest_uscis_fy`. Any red = ship blocker. This guarantees the high-stakes
+  names a user is likeliest to query are correct, without chasing a global
+  percentage.
+
+  **Hardened (2026-07-12):** presence-only proves the two sources *joined*, not
+  that the join is *correct* — a wrong merge into a small bucket leaves both
+  counts non-zero and passes green. Two additions:
+  1. **Magnitude bands, not just presence.** Each marquee name asserts its
+     counts fall in a reviewed order-of-magnitude band (Amazon's certified LCAs
+     are thousands, not 12). Catches wrong-merge-into-small-bucket and
+     split-not-merged.
+  2. **Data-derived allowlist.** The allowlist is the hand-picked marquee set
+     **unioned with the top-N USCIS employers by approval volume** at
+     `latest_uscis_fy`, so the gate covers the names that dominate the *numeric*
+     error surface, not only the ones we remembered.
+- **Orphan metric (published).** The **approval-weighted** orphan rate is the
+  single public honesty metric ("N% of H-1B approvals sit on employers we could
+  not cross-match"). It is logged to `meta` each build and is observability,
+  NOT a gate. The key-weighted rate stays internal (a curation-progress number;
+  driving it down chases tiny firms, which ADR-0002 declines). Query-weighted
+  orphan rate is the post-launch curation compass once engagement data exists.
 
 ## Data flow
 
